@@ -67,3 +67,14 @@ Build "d31337m3.com" (pronounced "delete me dot com") — a complete Online Repu
 - **New `/api/broker-contacts` endpoint** + admin `/api/admin/removals` + admin `/api/admin/removals/{id}/mark-removed`
 - **Admin → Removals tab**: track every dispatched legal notice, the broker email it went to, and one-click "MARK REMOVED" (which updates the finding + sends user confirmation email)
 - **Interac flow polish**: 5-step plain-English instructions, USD + CAD estimate, "AUTO-DEPOSIT ENABLED" green callout, no security question warning. `payments@d31337m3.com` gets an automatic notification email when a user initiates payment.
+
+### Iteration 4 (2026-06-19) — Admin Console: Waves 1, 2, 3
+**Wave 1 (Operability):** Reusable AdminTable with search/filter/multi-select-dropdowns/CSV-export/pagination · right-sliding Drawer component · User CRUD (suspend/delete/reset-pw/change plan/grant admin/impersonate/trigger scan) · payment & removal detail drawers · Audit Log tab · 9 new admin endpoints (PATCH/DELETE users, password reset, admin scan, impersonate, audit log, payment/removal detail).
+
+**Wave 2 (Visibility):** Analytics tab with 4 KPIs + 5 charts (revenue, signups, findings/removals trend, MRR by plan, payment method pie, severity donut) · System Health tab with live status of MongoDB, SMTP, 3 RPCs, scan engine, PayPal + SMTP test-send · Documents tab listing every legal doc across all users with view-drawer (body, signature, dispatch status) · 4 new admin endpoints (analytics, health, smtp-test, admin docs).
+
+**Wave 3 (Hardening — partial):** In-memory rate limiter (8 attempts / 15min per IP, returns 429) on `/auth/login` and `/auth/register` · DB-backed Broker Contacts CRUD (no redeploy to add a broker) with 5s read cache · seed-on-startup from constant if empty · Settings panel (read-only env summary, masked passwords, 6 sections) · 4 new admin endpoints (broker CRUD + settings).
+
+**Deferred from Wave 3:** TOTP 2FA · RBAC role tiers (super_admin/support/finance) — these need a larger budget for proper UX design + flow.
+
+Admin console total: **10 tabs**, 30+ admin endpoints, audit-logged mutations.

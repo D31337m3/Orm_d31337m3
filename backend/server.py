@@ -78,6 +78,41 @@ BROKER_CONTACTS = {
     "Bing Search": {"email": "privacy@microsoft.com", "form": "https://www.bing.com/webmasters/tools/eu-privacy-request"},
 }
 
+
+# Cached broker contacts read from DB; falls back to BROKER_CONTACTS on miss.
+_broker_cache: dict[str, dict] = {}
+_broker_cache_at: float = 0.0
+
+
+async def get_broker_contact(broker: str) -> dict:
+    """Return contact for a broker. Reads from DB first (5s cache), falls back to constant."""
+    import time as _t
+    global _broker_cache_at, _broker_cache
+    if _t.time() - _broker_cache_at > 5:
+        rows = await db.broker_contacts.find({}, {"_id": 0}).to_list(200)
+        _broker_cache = {r["broker"]: {"email": r.get("email"), "form": r.get("form")} for r in rows}
+        _broker_cache_at = _t.time()
+    return _broker_cache.get(broker) or BROKER_CONTACTS.get(broker, {})
+
+
+# ── Login rate limiter (in-memory) ───────────────────────────────────────────
+RATE_LIMITS: dict[str, list[float]] = {}
+RATE_WINDOW_SEC = 60 * 15  # 15 minutes
+RATE_MAX_ATTEMPTS = 8
+
+
+def _ratelimit(key: str) -> tuple[bool, int]:
+    """Return (allowed, retry_after_seconds)."""
+    import time as _t
+    now = _t.time()
+    bucket = [t for t in RATE_LIMITS.get(key, []) if now - t < RATE_WINDOW_SEC]
+    if len(bucket) >= RATE_MAX_ATTEMPTS:
+        oldest = bucket[0]
+        return False, int(RATE_WINDOW_SEC - (now - oldest))
+    bucket.append(now)
+    RATE_LIMITS[key] = bucket
+    return True, 0
+
 # North America only — per product requirements
 SUPPORTED_COUNTRIES = {
     "CA": {"name": "Canada", "states": ["AB","BC","MB","NB","NL","NS","NT","NU","ON","PE","QC","SK","YT"], "privacy_law": "PIPEDA / Quebec Law 25"},
@@ -668,13 +703,21 @@ async def get_brokers():
 
 
 @api.get("/broker-contacts")
-async def get_broker_contacts():
+async def get_broker_contacts_endpoint():
+    # Return the merged registry (DB overrides constants)
+    rows = await db.broker_contacts.find({}, {"_id": 0}).to_list(200)
+    if rows:
+        return {"contacts": {r["broker"]: {"email": r.get("email"), "form": r.get("form")} for r in rows}}
     return {"contacts": BROKER_CONTACTS}
 
 
 # ---------------- Auth ----------------
 @api.post("/auth/register")
-async def register(payload: RegisterIn, background: BackgroundTasks):
+async def register(payload: RegisterIn, background: BackgroundTasks, request: Request):
+    ip = request.client.host if request.client else "anon"
+    allowed, retry = _ratelimit(f"register:{ip}")
+    if not allowed:
+        raise HTTPException(status_code=429, detail=f"Too many signups from this IP. Try again in {retry // 60}m.")
     email = payload.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -714,7 +757,11 @@ async def register(payload: RegisterIn, background: BackgroundTasks):
 
 
 @api.post("/auth/login")
-async def login(payload: LoginIn):
+async def login(payload: LoginIn, request: Request):
+    ip = (request.client.host if request.client else "anon") + ":" + payload.email.lower()
+    allowed, retry = _ratelimit(f"login:{ip}")
+    if not allowed:
+        raise HTTPException(status_code=429, detail=f"Too many attempts. Try again in {retry // 60}m {retry % 60}s.")
     email = payload.email.lower()
     user = await db.users.find_one({"email": email})
     if not user or not user.get("password_hash") or not verify_password(payload.password, user["password_hash"]):
@@ -815,7 +862,7 @@ async def request_removal(payload: RemovalRequestIn, background: BackgroundTasks
         {"$set": {"status": "pending_removal", "removal_requested_at": now_iso()}}
     )
     broker = f["broker"]
-    contact = BROKER_CONTACTS.get(broker, {})
+    contact = await get_broker_contact(broker)
     removal = {
         "id": str(uuid.uuid4()), "user_id": user["id"], "finding_id": payload.finding_id,
         "broker": broker, "broker_email": contact.get("email"), "broker_form": contact.get("form"),
@@ -1306,6 +1353,99 @@ async def admin_get_document(document_id: str, admin: dict = Depends(require_adm
     return {"document": d}
 
 
+# ── Wave 3: Broker Contacts CRUD ──────────────────────────────────────────────
+class BrokerContactIn(BaseModel):
+    broker: str
+    email: Optional[str] = None
+    form: Optional[str] = None
+
+
+@api.get("/admin/broker-contacts")
+async def admin_list_broker_contacts(admin: dict = Depends(require_admin)):
+    rows = await db.broker_contacts.find({}, {"_id": 0}).sort("broker", 1).to_list(500)
+    return {"contacts": rows}
+
+
+@api.post("/admin/broker-contacts")
+async def admin_upsert_broker_contact(payload: BrokerContactIn, admin: dict = Depends(require_admin)):
+    if not payload.broker.strip():
+        raise HTTPException(status_code=400, detail="Broker name required")
+    update = {
+        "broker": payload.broker.strip(),
+        "email": payload.email,
+        "form": payload.form,
+        "updated_at": now_iso(),
+        "updated_by": admin["email"],
+    }
+    existing = await db.broker_contacts.find_one({"broker": update["broker"]})
+    if existing:
+        await db.broker_contacts.update_one({"broker": update["broker"]}, {"$set": update})
+    else:
+        update["id"] = str(uuid.uuid4())
+        update["created_at"] = now_iso()
+        await db.broker_contacts.insert_one(update)
+    await db.admin_audit.insert_one({
+        "id": str(uuid.uuid4()), "actor_id": admin["id"], "actor_email": admin["email"],
+        "action": "broker_contact_upsert", "target_email": update["broker"], "changes": update, "at": now_iso(),
+    })
+    return {"ok": True}
+
+
+@api.delete("/admin/broker-contacts/{broker_name}")
+async def admin_delete_broker_contact(broker_name: str, admin: dict = Depends(require_admin)):
+    res = await db.broker_contacts.delete_one({"broker": broker_name})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Not found")
+    await db.admin_audit.insert_one({
+        "id": str(uuid.uuid4()), "actor_id": admin["id"], "actor_email": admin["email"],
+        "action": "broker_contact_delete", "target_email": broker_name, "at": now_iso(),
+    })
+    return {"ok": True}
+
+
+# ── Wave 3: Settings (read-only summary) ──────────────────────────────────────
+@api.get("/admin/settings")
+async def admin_settings(admin: dict = Depends(require_admin)):
+    def mask(v: str) -> str:
+        if not v:
+            return ""
+        if len(v) <= 6:
+            return "***"
+        return v[:3] + "*" * (len(v) - 6) + v[-3:]
+
+    return {
+        "environment": {
+            "mongo_db": os.environ.get("DB_NAME"),
+            "smtp_host": os.environ.get("SMTP_HOST"),
+            "smtp_port": os.environ.get("SMTP_PORT"),
+            "smtp_username": os.environ.get("SMTP_USERNAME"),
+            "smtp_password_masked": mask(os.environ.get("SMTP_PASSWORD", "")),
+            "smtp_enabled": SMTP_ENABLED,
+            "smtp_from": os.environ.get("SMTP_FROM"),
+            "payments_email": PAYMENTS_EMAIL,
+            "crypto_wallet": CRYPTO_WALLET,
+            "ethereum_rpc": os.environ.get("ETHEREUM_RPC_URL"),
+            "polygon_rpc": os.environ.get("POLYGON_RPC_URL"),
+            "base_rpc": os.environ.get("BASE_RPC_URL"),
+            "paypal_configured": bool(os.environ.get("PAYPAL_CLIENT_ID")),
+            "paypal_api_base": os.environ.get("PAYPAL_API_BASE"),
+            "jwt_algorithm": JWT_ALGORITHM,
+            "token_expiry_minutes": TOKEN_EXP_MIN,
+            "admin_email": ADMIN_EMAIL,
+            "cors_origins": os.environ.get("CORS_ORIGINS"),
+        },
+        "rate_limiter": {
+            "window_seconds": RATE_WINDOW_SEC,
+            "max_attempts": RATE_MAX_ATTEMPTS,
+            "active_buckets": len(RATE_LIMITS),
+        },
+        "plans": list(PLANS.values()),
+        "supported_countries": list(SUPPORTED_COUNTRIES.keys()),
+        "broker_count_db": await db.broker_contacts.count_documents({}),
+        "broker_count_builtin": len(BROKER_CONTACTS),
+    }
+
+
 @api.get("/admin/payments/{payment_id}")
 async def admin_get_payment(payment_id: str, admin: dict = Depends(require_admin)):
     p = await db.payments.find_one({"id": payment_id}, {"_id": 0})
@@ -1493,7 +1633,7 @@ async def sign_document(payload: SignDocumentIn, background: BackgroundTasks, us
     if doc.get("finding_id"):
         f = await db.findings.find_one({"id": doc["finding_id"], "user_id": user["id"]})
         if f:
-            contact = BROKER_CONTACTS.get(f.get("broker"), {})
+            contact = await get_broker_contact(f.get("broker"))
             broker_email = contact.get("email")
             dispatch["broker_email"] = broker_email
             dispatch["form_url"] = contact.get("form")
@@ -1583,6 +1723,15 @@ async def startup():
     await db.users.create_index("id", unique=True)
     await db.keywords.create_index([("user_id", 1)])
     await db.findings.create_index([("user_id", 1)])
+    # Seed broker contacts from constants if collection is empty (Wave 3)
+    if await db.broker_contacts.count_documents({}) == 0:
+        for broker, c in BROKER_CONTACTS.items():
+            await db.broker_contacts.insert_one({
+                "id": str(uuid.uuid4()),
+                "broker": broker, "email": c.get("email"), "form": c.get("form"),
+                "created_at": now_iso(), "updated_at": now_iso(), "updated_by": "system_seed",
+            })
+        logger.info(f"Seeded {len(BROKER_CONTACTS)} broker contacts into db.broker_contacts")
 
 
 @app.on_event("shutdown")

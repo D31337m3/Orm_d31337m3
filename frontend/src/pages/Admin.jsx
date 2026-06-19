@@ -8,6 +8,8 @@ import { useNavigate } from "react-router-dom";
 import { CheckCircle2, XCircle, UserX, KeyRound, Play, LogIn, Trash2, ShieldCheck, ShieldOff, Eye } from "lucide-react";
 import AdminAnalytics from "@/components/AdminAnalytics";
 import AdminHealth from "@/components/AdminHealth";
+import AdminBrokerContacts from "@/components/AdminBrokerContacts";
+import AdminSettings from "@/components/AdminSettings";
 
 const Stat = ({ label, value, testid }) => (
   <div className="brutal-card p-5" data-testid={testid}>
@@ -234,8 +236,10 @@ export default function Admin() {
           ["removals","Removals"],
           ["users","Users"],
           ["documents","Documents"],
+          ["brokers","Brokers"],
           ["emails","Email Log"],
           ["audit","Audit Log"],
+          ["settings","Settings"],
         ].map(([k,l]) => (
           <button key={k} onClick={()=>setTab(k)} data-testid={`admin-tab-${k}`}
             className={`font-mono text-xs px-4 py-2 border ${tab===k ? "border-white text-white" : "border-[#222] text-zinc-500 hover:text-white"}`}>
@@ -246,6 +250,8 @@ export default function Admin() {
 
       {tab === "analytics" && <AdminAnalytics />}
       {tab === "health" && <AdminHealth />}
+      {tab === "brokers" && <AdminBrokerContacts />}
+      {tab === "settings" && <AdminSettings />}
 
       {tab === "payments" && (
         <AdminTable
