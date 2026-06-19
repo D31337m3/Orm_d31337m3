@@ -1,0 +1,101 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 4 (Swiss Brutalist & High-Contrast Tech)",
+  "design_concept": "The Terminal Interface meets High-End Privacy Service. An uncompromising, data-dense, privacy-first platform characterized by hard 1px borders, deep black backgrounds, monospace data points, and stark typography. 'd31337m3' is a serious weapon against data brokers.",
+  "colors": {
+    "background": "#050505",
+    "surface": "#111111",
+    "surface_hover": "#1A1A1A",
+    "border": "#222222",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A1A1AA",
+    "primary": "#FF3333",
+    "primary_hover": "#CC0000",
+    "primary_text": "#FFFFFF",
+    "accent_warning": "#FFD700",
+    "accent_success": "#00FF41"
+  },
+  "typography": {
+    "font_family_headings": "Chivo, sans-serif",
+    "font_family_body": "IBM Plex Sans, sans-serif",
+    "font_family_mono": "JetBrains Mono, monospace",
+    "import_url": "@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@400;700;900&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap');",
+    "rules": {
+      "h1": "text-5xl sm:text-6xl md:text-7xl font-black tracking-tighter uppercase text-white",
+      "h2": "text-3xl sm:text-4xl font-bold tracking-tight text-white",
+      "h3": "text-xl sm:text-2xl font-bold tracking-tight text-white",
+      "body": "text-base leading-relaxed text-zinc-400",
+      "mono_data": "font-mono text-sm tracking-tight text-zinc-300",
+      "overline": "font-mono text-xs tracking-[0.2em] uppercase text-zinc-500"
+    }
+  },
+  "spacing_and_layout": {
+    "global": "Generous spacing on marketing (p-8 to p-24). Dense, control-room grid for dashboard (p-4 to p-6).",
+    "borders": "Heavy use of 1px solid borders (#222222) to separate sections, avoiding soft shadows.",
+    "radius": "Zero or extremely tight radius. Use rounded-none or rounded-sm max for a sharp brutalist feel.",
+    "marketing_grid": "Mode A: Tetris Grid. Asymmetrical grid, col-span-full md:col-span-8 for hero, col-span-4 for supporting blocks.",
+    "dashboard_grid": "Mode B: Control Room Grid. grid-cols-1 md:grid-cols-3 lg:grid-cols-4. gap-4 with border-collapse strategies.",
+    "alignment": "Strict left-alignment for data and headings. Avoid center alignment except for explicit call-to-action blocks."
+  },
+  "components": {
+    "navigation": "Sticky nav with glassmorphism (backdrop-blur-xl bg-black/80) and 1px bottom border. Font mono for links.",
+    "hero_section": "Dark overlay (bg-black/60) over the background image. Huge text, high contrast. Use a 'Kinetic Texture' marquee running in the background.",
+    "buttons": "Brutalist buttons: Flat background, sharp edges, 1px border. Hover state: invert colors (bg-white text-black) or primary (bg-red-500 text-white).",
+    "cards": "Flat surface (#111111), 1px border (#222222), no shadow. Hover: slight border color change to white/50.",
+    "reputation_gauge": "Minimalist semi-circle or linear progress bar. Monospace numbers inside. Color mapped to score (Red < 40, Yellow 40-70, Green > 70).",
+    "findings_table": "Shadcn table component. Dense rows. Use JetBrains Mono for IPs, URLs, Dates. Action column with 'Request Removal' red text buttons.",
+    "inputs": "Square inputs, dark background, light borders. Focus: ring-1 ring-white ring-offset-0 ring-offset-black.",
+    "marquee": "Use react-fast-marquee for a brutalist ticker showing targeted data brokers (e.g., 'ACXIOM • SPOKEO • WHITE PAGES • EQUIFAX'). No logos, just large monospace text."
+  },
+  "motion_and_interactions": {
+    "hover": "Invert styles or aggressive contrast shift (e.g., text turns red on hover). Always set explicit text colors on hover.",
+    "transitions": "Fast and snappy. transition-all duration-150 ease-in-out.",
+    "loading": "Terminal-style blinking cursor or ASCII progress bar instead of standard spinners."
+  },
+  "image_assets": {
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1614064548237-096f735f344f",
+      "description": "Padlock with light trails for stealth/cybersecurity vibe. Apply heavy dark gradient overlay.",
+      "usage": "Marketing Hero Section Background"
+    },
+    "abstract_data": {
+      "url": "https://images.unsplash.com/photo-1644088379091-d574269d422f",
+      "description": "Blue data nodes on black. Apply grayscale or multiply blend mode to keep it monochromatic/red.",
+      "usage": "Dashboard empty states or generic section backgrounds"
+    },
+    "testimonials": [
+      {
+        "url": "https://images.unsplash.com/photo-1770452603217-89b4f03e8271",
+        "name": "Marcus T.",
+        "role": "CEO, Tech Firm",
+        "usage": "Marketing page testimonial"
+      },
+      {
+        "url": "https://images.pexels.com/photos/12396627/pexels-photo-12396627.jpeg",
+        "name": "Sarah J.",
+        "role": "Public Figure",
+        "usage": "Marketing page testimonial"
+      }
+    ],
+    "sponsors": "Do not use image logos for data brokers or partners. Use text-based typography (font-mono uppercase text-zinc-500) to maintain the brutalist aesthetic."
+  },
+  "accessibility_and_testing": {
+    "contrast": "Ensure all text meets at least 4.5:1 against the #050505 or #111111 background.",
+    "data_testid_rules": "All interactive elements MUST have role-based data-testid attributes (e.g., 'marketing-cta-button', 'dashboard-nav-link', 'remove-data-button')."
+  },
+  "instructions_to_main_agent": [
+    "Install and use 'lucide-react' for icons. Prefer technical/sharp icons (terminal, shield, database).",
+    "Use 'react-fast-marquee' for the data broker target list on the marketing page.",
+    "Avoid Shadcn 'Card' defaults if they include soft shadows. Strip shadows and enforce 1px solid borders.",
+    "Create the following pages: Marketing Landing Page, Subscription Onboarding (Tiers: Basic $29, Pro $79, Enterprise $199), Client Dashboard, Admin Panel, and Auth Screens (Login, Register).",
+    "In the Client Dashboard, include: A Reputation Score (0-100 gauge), Keyword monitoring widgets, a recent findings feed, and a data removal request tracker.",
+    "In the Data Broker findings table, include columns: Broker Name, Data Found (Phone, Address, etc.), Severity, Date, Action (Request Removal button).",
+    "In the Billing section, provide UI for Interac, PayPal, and Crypto USDC payment instructions.",
+    "In the Admin panel, include: client list, payment verification, crawl management, system stats.",
+    "Implement the dashboard with a persistent left sidebar and a dense top-nav. Sidebar should be pitch black, content area #111111.",
+    "Use pure HTML/Tailwind for the marketing page layouts to ensure the 'Tetris Grid' asymmetry.",
+    "Use Shadcn components heavily customized for the dashboard forms, tables, and dialogs.",
+    "Do not use generic blue colors. Primary actionable color is Signal Red (#FF3333).",
+    "Ensure all interactive elements have data-testid attributes."
+  ]
+}
