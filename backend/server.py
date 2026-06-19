@@ -1139,6 +1139,173 @@ async def admin_audit_log(admin: dict = Depends(require_admin)):
     return {"audit": rows}
 
 
+# ── Wave 2: Analytics + System Health + Documents ─────────────────────────────
+@api.get("/admin/analytics")
+async def admin_analytics(admin: dict = Depends(require_admin)):
+    days = 30
+    today = datetime.now(timezone.utc).date()
+    series = []
+    for i in range(days - 1, -1, -1):
+        d = today - timedelta(days=i)
+        series.append({"d": d.isoformat(), "signups": 0, "revenue": 0, "findings": 0, "removals": 0, "active_scans": 0})
+    idx = {s["d"]: s for s in series}
+
+    # Signups
+    async for u in db.users.find({}, {"created_at": 1}):
+        k = (u.get("created_at") or "")[:10]
+        if k in idx:
+            idx[k]["signups"] += 1
+    # Revenue (confirmed payments only)
+    async for p in db.payments.find({"status": "confirmed"}, {"created_at": 1, "amount_usd": 1}):
+        k = (p.get("created_at") or "")[:10]
+        if k in idx:
+            idx[k]["revenue"] += int(p.get("amount_usd", 0) or 0)
+    # Findings
+    async for f in db.findings.find({}, {"discovered_at": 1}):
+        k = (f.get("discovered_at") or "")[:10]
+        if k in idx:
+            idx[k]["findings"] += 1
+    # Removals
+    async for r in db.removal_requests.find({}, {"created_at": 1}):
+        k = (r.get("created_at") or "")[:10]
+        if k in idx:
+            idx[k]["removals"] += 1
+    # Active scans per day
+    async for s in db.scans.find({}, {"ran_at": 1}):
+        k = (s.get("ran_at") or "")[:10]
+        if k in idx:
+            idx[k]["active_scans"] += 1
+
+    # MRR by plan (active subs only)
+    plan_counts = {"basic": 0, "pro": 0, "enterprise": 0}
+    async for u in db.users.find({"subscription_status": "active"}, {"plan_id": 1}):
+        pid = u.get("plan_id")
+        if pid in plan_counts:
+            plan_counts[pid] += 1
+    mrr_by_plan = [
+        {"plan": p.title(), "subs": plan_counts[p], "mrr": plan_counts[p] * PLANS[p]["price_usd"], "color":
+         "#71717a" if p == "basic" else "#FFD700" if p == "pro" else "#FF3333"}
+        for p in ["basic", "pro", "enterprise"]
+    ]
+    total_mrr = sum(m["mrr"] for m in mrr_by_plan)
+
+    # Method split
+    method_split = {"interac": 0, "crypto": 0, "paypal": 0}
+    async for p in db.payments.find({"status": "confirmed"}, {"method": 1}):
+        m = p.get("method")
+        if m in method_split:
+            method_split[m] += 1
+
+    # Severity distribution (active findings)
+    sev_dist = {"low": 0, "medium": 0, "high": 0, "critical": 0}
+    async for f in db.findings.find({"status": "active"}, {"severity": 1}):
+        s = f.get("severity")
+        if s in sev_dist:
+            sev_dist[s] += 1
+
+    return {
+        "timeseries": series,
+        "mrr_total": total_mrr,
+        "mrr_by_plan": mrr_by_plan,
+        "method_split": [{"name": k, "value": v} for k, v in method_split.items()],
+        "severity_distribution": [{"name": k.upper(), "value": v} for k, v in sev_dist.items()],
+        "totals": {
+            "users": await db.users.count_documents({}),
+            "active_subs": await db.users.count_documents({"subscription_status": "active"}),
+            "trial_users": await db.users.count_documents({"subscription_status": "trial"}),
+            "suspended_users": await db.users.count_documents({"subscription_status": "suspended"}),
+            "total_revenue": sum(s["revenue"] for s in series),
+            "documents_signed": await db.documents.count_documents({"status": "signed"}),
+            "documents_dispatched": await db.documents.count_documents({"dispatched_at": {"$ne": None}}),
+        },
+    }
+
+
+@api.get("/admin/health")
+async def admin_health(admin: dict = Depends(require_admin)):
+    health = {"checks": [], "ok": True}
+
+    # Mongo
+    try:
+        await db.command("ping")
+        stats = await db.command("dbstats")
+        health["checks"].append({"name": "MongoDB", "status": "ok", "detail": f"collections={stats.get('collections')} data={int(stats.get('dataSize',0)/1024)}KB"})
+    except Exception as e:
+        health["checks"].append({"name": "MongoDB", "status": "fail", "detail": str(e)[:120]})
+        health["ok"] = False
+
+    # SMTP config
+    if SMTP_ENABLED:
+        h24 = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        delivered = await db.email_log.count_documents({"sent_at": {"$gte": h24}, "delivered": True})
+        failed = await db.email_log.count_documents({"sent_at": {"$gte": h24}, "delivered": False, "mocked": {"$ne": True}})
+        health["checks"].append({
+            "name": "SMTP", "status": "ok" if failed == 0 else "warn",
+            "detail": f"24h: {delivered} sent / {failed} failed · host={os.environ.get('SMTP_HOST')}",
+        })
+    else:
+        health["checks"].append({"name": "SMTP", "status": "warn", "detail": "SMTP_ENABLED=false (emails are mocked)"})
+
+    # Crypto RPCs
+    try:
+        from web3 import Web3
+        for name, env_key in [("Ethereum RPC", "ETHEREUM_RPC_URL"), ("Polygon RPC", "POLYGON_RPC_URL"), ("Base RPC", "BASE_RPC_URL")]:
+            try:
+                w3 = Web3(Web3.HTTPProvider(os.environ[env_key], request_kwargs={"timeout": 5}))
+                bn = w3.eth.block_number
+                health["checks"].append({"name": name, "status": "ok", "detail": f"block={bn}"})
+            except Exception as e:
+                health["checks"].append({"name": name, "status": "fail", "detail": str(e)[:120]})
+                health["ok"] = False
+    except Exception as e:
+        health["checks"].append({"name": "Web3", "status": "fail", "detail": str(e)[:120]})
+
+    # Background scan stats
+    h1 = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    recent_scans = await db.scans.count_documents({"ran_at": {"$gte": h1}})
+    health["checks"].append({"name": "Scan Engine", "status": "ok", "detail": f"{recent_scans} scans in last hour"})
+
+    # PayPal config
+    if os.environ.get("PAYPAL_CLIENT_ID"):
+        health["checks"].append({"name": "PayPal", "status": "ok", "detail": "Credentials configured"})
+    else:
+        health["checks"].append({"name": "PayPal", "status": "warn", "detail": "PAYPAL_CLIENT_ID not configured (paypal_unavailable)"})
+
+    health["checked_at"] = now_iso()
+    return health
+
+
+class HealthTestEmailIn(BaseModel):
+    to: EmailStr
+
+
+@api.post("/admin/health/smtp-test")
+async def admin_smtp_test(payload: HealthTestEmailIn, admin: dict = Depends(require_admin)):
+    ok = await send_email(payload.to, "[d31337m3] SMTP test ping",
+                          f"This is a test from the admin health panel.\nSent by {admin['email']} at {now_iso()}.\n\nIf you receive this, SMTP is healthy.")
+    return {"ok": ok}
+
+
+@api.get("/admin/documents")
+async def admin_documents(admin: dict = Depends(require_admin)):
+    rows = await db.documents.find({}, {"_id": 0, "signature_image": 0}).sort("created_at", -1).to_list(1000)
+    user_ids = list({d["user_id"] for d in rows if d.get("user_id")})
+    users = {u["id"]: u for u in await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "email": 1}).to_list(1000)}
+    for d in rows:
+        d["user_email"] = users.get(d["user_id"], {}).get("email")
+    return {"documents": rows}
+
+
+@api.get("/admin/documents/{document_id}")
+async def admin_get_document(document_id: str, admin: dict = Depends(require_admin)):
+    d = await db.documents.find_one({"id": document_id}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Not found")
+    if d.get("user_id"):
+        d["_user"] = await db.users.find_one({"id": d["user_id"]}, {"_id": 0, "password_hash": 0})
+    return {"document": d}
+
+
 @api.get("/admin/payments/{payment_id}")
 async def admin_get_payment(payment_id: str, admin: dict = Depends(require_admin)):
     p = await db.payments.find_one({"id": payment_id}, {"_id": 0})

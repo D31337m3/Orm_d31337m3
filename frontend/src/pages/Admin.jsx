@@ -5,7 +5,9 @@ import Drawer, { Field } from "@/components/Drawer";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle2, XCircle, UserX, KeyRound, Play, LogIn, Trash2, ShieldCheck, ShieldOff } from "lucide-react";
+import { CheckCircle2, XCircle, UserX, KeyRound, Play, LogIn, Trash2, ShieldCheck, ShieldOff, Eye } from "lucide-react";
+import AdminAnalytics from "@/components/AdminAnalytics";
+import AdminHealth from "@/components/AdminHealth";
 
 const Stat = ({ label, value, testid }) => (
   <div className="brutal-card p-5" data-testid={testid}>
@@ -28,23 +30,27 @@ export default function Admin() {
   const [emails, setEmails] = useState([]);
   const [removals, setRemovals] = useState([]);
   const [audit, setAudit] = useState([]);
+  const [documents, setDocuments] = useState([]);
 
   // Detail drawer state
   const [userDetail, setUserDetail] = useState(null);
   const [paymentDetail, setPaymentDetail] = useState(null);
   const [removalDetail, setRemovalDetail] = useState(null);
+  const [documentDetail, setDocumentDetail] = useState(null);
 
   const load = async () => {
-    const [s, u, p, e, r, a] = await Promise.all([
+    const [s, u, p, e, r, a, d] = await Promise.all([
       api.get("/admin/stats"),
       api.get("/admin/users"),
       api.get("/admin/payments"),
       api.get("/admin/email-log"),
       api.get("/admin/removals"),
       api.get("/admin/audit-log"),
+      api.get("/admin/documents"),
     ]);
     setStats(s.data); setUsers(u.data.users); setPayments(p.data.payments);
     setEmails(e.data.emails); setRemovals(r.data.removals); setAudit(a.data.audit);
+    setDocuments(d.data.documents);
   };
   useEffect(() => { load(); }, []);
 
@@ -182,6 +188,32 @@ export default function Admin() {
     { key: "changes", label: "Changes", render: r => <span className="text-zinc-400">{r.changes ? JSON.stringify(r.changes).slice(0,80) : "—"}</span>, csv: r => JSON.stringify(r.changes || {}) },
   ];
 
+  const documentColumns = [
+    { key: "created_at", label: "Created", render: r => <span className="text-zinc-500">{r.created_at?.slice(0,16)}</span> },
+    { key: "user_email", label: "User" },
+    { key: "title", label: "Template", render: r => <span className="text-white">{r.title}</span> },
+    { key: "recipient_broker", label: "Recipient" },
+    { key: "country", label: "Country" },
+    { key: "status", label: "Status", render: r => STATUS_PILL(r.status?.toUpperCase(), r.status === "signed" ? "#00FF41" : "#FFD700") },
+    { key: "dispatched_to", label: "Dispatched", render: r => r.dispatched_to ? <span className="text-[#00FF41]">{r.dispatched_to}</span> : "—" },
+  ];
+  const documentFilters = [
+    { key: "status", label: "status", options: [
+      { value: "draft", label: "Draft" },
+      { value: "signed", label: "Signed" },
+    ]},
+    { key: "country", label: "country", options: [
+      { value: "CA", label: "🇨🇦 Canada" },
+      { value: "US", label: "🇺🇸 USA" },
+      { value: "MX", label: "🇲🇽 México" },
+    ]},
+  ];
+
+  const openDocument = async (d) => {
+    const r = await api.get(`/admin/documents/${d.id}`);
+    setDocumentDetail(r.data.document);
+  };
+
   return (
     <DashboardLayout title="Admin Console">
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
@@ -195,13 +227,25 @@ export default function Admin() {
       </div>
 
       <div className="flex gap-2 mb-4 flex-wrap" data-testid="admin-tabs">
-        {[["payments","Payments"],["removals","Removals"],["users","Users"],["emails","Email Log"],["audit","Audit Log"]].map(([k,l]) => (
+        {[
+          ["analytics","Analytics"],
+          ["health","Health"],
+          ["payments","Payments"],
+          ["removals","Removals"],
+          ["users","Users"],
+          ["documents","Documents"],
+          ["emails","Email Log"],
+          ["audit","Audit Log"],
+        ].map(([k,l]) => (
           <button key={k} onClick={()=>setTab(k)} data-testid={`admin-tab-${k}`}
             className={`font-mono text-xs px-4 py-2 border ${tab===k ? "border-white text-white" : "border-[#222] text-zinc-500 hover:text-white"}`}>
             {l.toUpperCase()}
           </button>
         ))}
       </div>
+
+      {tab === "analytics" && <AdminAnalytics />}
+      {tab === "health" && <AdminHealth />}
 
       {tab === "payments" && (
         <AdminTable
@@ -239,6 +283,14 @@ export default function Admin() {
           testid="admin-audit" exportName="audit-log"
           data={audit} columns={auditColumns}
           searchKeys={["actor_email", "action", "target_email"]}
+        />
+      )}
+      {tab === "documents" && (
+        <AdminTable
+          testid="admin-documents" exportName="documents"
+          data={documents} columns={documentColumns} filters={documentFilters}
+          searchKeys={["title", "user_email", "recipient_broker", "country"]}
+          onRowClick={openDocument}
         />
       )}
 
@@ -287,8 +339,7 @@ export default function Admin() {
         )}
       </Drawer>
 
-      {/* User drawer */}
-      <Drawer open={!!userDetail} onClose={() => setUserDetail(null)} title={userDetail ? userDetail.email : ""} testid="user-drawer">
+      {/* User drawer */}      <Drawer open={!!userDetail} onClose={() => setUserDetail(null)} title={userDetail ? userDetail.email : ""} testid="user-drawer">
         {userDetail && (
           <div className="space-y-1">
             <Field label="User ID" value={userDetail.id} />
@@ -344,6 +395,33 @@ export default function Admin() {
               <button onClick={() => impersonate(userDetail)} disabled={userDetail.id === me?.id} data-testid="ud-impersonate" className="brutal-btn flex items-center gap-2 justify-center"><LogIn size={14}/>Impersonate</button>
               <button onClick={() => deleteUser(userDetail)} disabled={userDetail.id === me?.id} data-testid="ud-delete" className="brutal-btn !border-[#FF3333] !text-[#FF3333] hover:!bg-[#FF3333] hover:!text-white flex items-center gap-2 justify-center"><Trash2 size={14}/>Delete User</button>
             </div>
+          </div>
+        )}
+      </Drawer>
+
+      {/* Document drawer */}
+      <Drawer open={!!documentDetail} onClose={() => setDocumentDetail(null)} title={documentDetail ? documentDetail.title : ""} testid="document-drawer">
+        {documentDetail && (
+          <div className="space-y-1">
+            <Field label="Document ID" value={documentDetail.id} />
+            <Field label="User" value={documentDetail._user?.email} />
+            <Field label="Template" value={documentDetail.template_id} />
+            <Field label="Recipient" value={documentDetail.recipient_broker} />
+            <Field label="Country" value={documentDetail.country} />
+            <Field label="Status" value={documentDetail.status?.toUpperCase()} />
+            <Field label="Created" value={documentDetail.created_at} />
+            {documentDetail.signed_at && <Field label="Signed" value={`${documentDetail.signed_name} · ${documentDetail.signed_at}`} />}
+            {documentDetail.dispatched_to && <Field label="Dispatched To" value={<span className="text-[#00FF41]">{documentDetail.dispatched_to}</span>} />}
+            <div className="mt-4 border border-[#222] p-4 bg-black">
+              <div className="overline mb-2">// body</div>
+              <pre className="font-mono text-xs text-zinc-300 whitespace-pre-wrap max-h-96 overflow-y-auto">{documentDetail.body}</pre>
+            </div>
+            {documentDetail.signature_image && (
+              <div className="mt-3 border border-[#222] p-3">
+                <div className="overline mb-2">// affixed signature</div>
+                <img src={documentDetail.signature_image} alt="sig" className="max-h-20 bg-white p-2 inline-block"/>
+              </div>
+            )}
           </div>
         )}
       </Drawer>
