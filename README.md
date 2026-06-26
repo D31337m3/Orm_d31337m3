@@ -1,0 +1,102 @@
+# Orm_d31337m3
+
+A full-stack web application (Emergent-based) with a FastAPI backend and a React frontend. This repository contains the backend API, frontend UI, and deployment helpers (Nginx configuration and setup script).
+
+## Overview
+
+- Backend: FastAPI (Python) located in the `backend/` directory.
+- Frontend: React (CRA-like) located in the `frontend/` directory.
+- Nginx: `nginx-d31337m3.conf` and `setup-nginx.sh` provide a reverse-proxy configuration.
+
+## Quick Start (Development)
+
+Prerequisites:
+- Python 3.11+
+- Node.js 18+
+- npm or yarn
+- nginx (for proxying; optional in local dev)
+
+Backend
+
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn server:app --host 127.0.0.1 --port 8001 --reload
+```
+
+Frontend
+
+```bash
+cd frontend
+npm install
+npm start
+# or: yarn
+# Frontend dev server listens on port 3000 by default
+```
+
+## Production / Deployment (NGINX)
+
+The repo includes `nginx-d31337m3.conf` and `setup-nginx.sh` to install a site into `/etc/nginx/sites-available` and enable it.
+
+Run as root on the target host:
+
+```bash
+sudo ./setup-nginx.sh
+```
+
+This does the following:
+- Copies `nginx-d31337m3.conf` to `/etc/nginx/sites-available/d31337m3`
+- Removes the Debian default site from `/etc/nginx/sites-enabled`
+- Creates a symlink in `/etc/nginx/sites-enabled` and reloads nginx
+
+Ensure your frontend server (or static build) is available on `127.0.0.1:3000` and backend on `127.0.0.1:8001`, or update the `proxy_pass` targets accordingly in `nginx-d31337m3.conf`.
+
+## Running Tests
+
+Python/Backend tests are located under `backend/tests` and repository-level tests under `tests/`.
+
+Run tests with pytest:
+
+```bash
+cd backend
+source venv/bin/activate
+pytest -q
+```
+
+## Troubleshooting
+
+- If the Nginx welcome page appears for your domain, ensure the default site is disabled:
+
+```bash
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo systemctl reload nginx
+```
+
+- If the browser shows a blank page but `curl` returns app HTML, check the browser console for JS/CSS asset errors and ensure the frontend static assets are being served at `/static/`.
+
+- To inspect the active Nginx configuration:
+
+```bash
+sudo nginx -T
+```
+
+## Contributing
+
+Open an issue or submit a PR. Follow the existing code style and add tests for new features.
+
+## License
+
+Specify project license here.
+
+## Documentation
+Additional project documentation is available in the `docs/` folder. Key documents:
+
+- [Docs index](docs/README.md)
+- [Security & Privacy](docs/security_and_privacy.md)
+- [Architecture](docs/architecture.md)
+- [Roadmap](docs/roadmap.md)
+- [Future Development](docs/future_development.md)
+
+For contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -3,7 +3,7 @@
 ## One-click install (Ubuntu / Debian)
 
 ```bash
-git clone https://github.com/YOUR-ORG/d31337m3.git
+git clone https://github.com/d31337m3/d31337m3.git
 cd d31337m3
 chmod +x install.sh
 sudo ./install.sh
