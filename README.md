@@ -88,7 +88,7 @@ Open an issue or submit a PR. Follow the existing code style and add tests for n
 
 ## License
 
-Specify project license here.
+The Open-Source portions of thks project are licenced under the MIT License. See [LICENSE](LICENSE) for details. The project may include third-party dependencies with their own licenses; please review those as needed. There may be proprietary components or services integrated into the project; consult the documentation for any usage restrictions. Proprietary components are not covered by the MIT License and may have separate licensing terms, as well as potential fees or usage restrictions. Users should review the documentation and licensing information for any proprietary components before use. D31337m3.com is a trademark of the project owner and may not be used without permission. The project owner reserves all rights to the trademark and any associated branding or logos. (C) 2024 D31337m3.com. All rights reserved.
 
 ## Documentation
 Additional project documentation is available in the `docs/` folder. Key documents:

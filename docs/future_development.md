@@ -1,9 +1,10 @@
 # Future Development
 
-This document collects ideas and guidance for future development directions.
+This document is a collection of ideas and plans for future development directions. We welcome contributions and feedback from the community. Please submit issues or pull requests for any suggestions or improvements.
 
 ## Architecture Improvements
 
+(Immeninent Todo:) *Next release will be a refactor the backend to support a more modular architecture, potentially moving towards a microservices approach.*
 - Microservices vs monolith: evaluate splitting backend into separate services for auth, billing, and core API as complexity grows.
 - Move static assets to a CDN and serve a minimal Nginx layer for edge caching.
 - Introduce a service mesh (e.g., Istio, Linkerd) when the number of services and inter-service policies grows.

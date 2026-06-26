@@ -23,12 +23,12 @@ This document describes the high-level architecture of Orm_d31337m3.
 - Use environment variables for configuration (DB URLs, secret keys, API keys).
 
 ## Scaling
-
+ (Todo:)
 - Use a load balancer in front of multiple app instances for high availability.
 - Offload static assets to a CDN.
 - Use connection pooling for database access and horizontal scaling for stateless backend components.
 
 ## Observability
-
+ (Todo:)
 - Add structured logging, metrics (Prometheus), and tracing (OpenTelemetry) to critical services.
 - Centralize logs and set up alerting for errors and operational thresholds.
