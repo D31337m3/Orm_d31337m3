@@ -3,7 +3,7 @@
 ## One-click install (Ubuntu / Debian)
 
 ```bash
-git clone https://github.com/YOUR-ORG/d31337m3.git
+git clone https://github.com/d31337m3/d31337m3.git
 cd d31337m3
 chmod +x install.sh
 sudo ./install.sh
@@ -30,6 +30,23 @@ To change settings later, edit `backend/.env` or `frontend/.env` and restart:
 ```bash
 sudo supervisorctl restart d31337m3-backend
 sudo supervisorctl restart d31337m3-frontend
+```
+
+## Promo code configuration
+
+The backend supports two promo slots using environment variables:
+
+- `PROMO_CODE_PRIMARY`: primary promo code (default: `OCanada75`)
+- `PROMO_PERCENT_PRIMARY`: primary promo discount percentage (default: `75`)
+- `PROMO_EXPIRES_PRIMARY`: primary promo expiration date in `YYYY-MM-DD` format (default: `2026-12-31`)
+- `PROMO_CODE_SECONDARY`: optional secondary promo code
+- `PROMO_PERCENT_SECONDARY`: optional secondary promo percentage
+- `PROMO_EXPIRES_SECONDARY`: optional secondary promo expiration date
+
+After editing `backend/.env`, restart the backend service:
+
+```bash
+sudo supervisorctl restart d31337m3-backend
 ```
 
 ## Production hardening checklist
