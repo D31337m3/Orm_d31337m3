@@ -21,11 +21,51 @@ export ORCHESTRATOR_JWT_SECRET="unique_secret_for_orchestrator_service"
 For production deployment, secrets should be stored in a secure vault:
 
 #### Options for Secure Secret Storage:
+- **Infisical** - Open-source secret management platform (integrated)
 - **HashiCorp Vault** - Industry standard for secret management
 - **AWS Secrets Manager** - If deployed on AWS
 - **Azure Key Vault** - If deployed on Azure
 - **Google Cloud Secret Manager** - If deployed on GCP
 - **Kubernetes Secrets** - If deployed on Kubernetes
+
+#### Infisical Integration (Default):
+
+Each service uses `shared/secrets_manager.py` to fetch secrets from Infisical at startup.
+
+**Setup Steps:**
+
+1. Create an Infisical account at https://app.infisical.com and create a project.
+
+2. Generate a service token or machine identity in Infisical with read access to secrets.
+
+3. Add secrets to your Infisical project for each service:
+```
+CLIENT_INDEX_JWT_SECRET     → unique_secret_for_client_index
+PAYMENTS_JWT_SECRET         → unique_secret_for_payments
+DATA_HANDLING_JWT_SECRET    → unique_secret_for_data_handling
+AUDITOR_JWT_SECRET          → unique_secret_for_auditor
+WATCHDOG_JWT_SECRET         → unique_secret_for_watchdog
+ORCHESTRATOR_JWT_SECRET     → unique_secret_for_orchestrator
+JWT_SECRET                  → legacy_shared_secret
+JWT_ALGORITHM               → HS256
+ACCESS_TOKEN_EXPIRE_MINUTES → 1440
+```
+
+4. Configure each service with the Infisical service token:
+```bash
+export INFISICAL_SITE_URL="https://app.infisical.com"
+export INFISICAL_SERVICE_TOKEN="st.xxxx.your-service-token"
+export INFISICAL_PROJECT_ID="your-project-id"
+export INFISICAL_ENVIRONMENT="prod"
+```
+
+5. Start the service — it will fetch secrets from Infisical on startup and cache them.
+
+**Architecture:**
+- `shared/secrets_manager.py` — Infisical client wrapper with caching
+- `init_infisical()` — Called on service startup, loads all secrets into cache
+- `get_secret(key, default)` — Retrieves secrets from cache, falls back to env vars
+- Falls back gracefully to environment variables if Infisical is unreachable
 
 #### Example with HashiCorp Vault:
 ```bash
@@ -108,14 +148,16 @@ async def call_internal_service(target_service: str, endpoint: str, data: dict):
 ### 6. Implementation Checklist
 
 For each service, ensure:
-- [ ] Service-specific JWT secret configured
+- [ ] Service-specific JWT secret configured in Infisical
+- [ ] `init_infisical()` called in startup event
 - [ ] Shared JWT utilities imported and used
 - [ ] Security middleware applied to appropriate endpoints
 - [ ] Public endpoints marked as such (registration, login, webhooks)
 - [ ] User-facing endpoints require user authentication
 - [ ] Service-to-service endpoints require service authentication
 - [ ] Auditor service validates all incoming write requests
-- [ ] All secrets stored securely (not in code or plain env vars in prod)
+- [ ] All secrets stored securely in Infisical (not in code or plain env vars in prod)
+- [ ] `INFISICAL_SERVICE_TOKEN` provided at runtime (not hardcoded)
 
 ### 7. Next Steps (Stage 3)
 

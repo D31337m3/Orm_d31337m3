@@ -3,25 +3,25 @@
 JWT Utility Service for Microservices Authentication
 Handles service-to-service authentication using JWT tokens
 """
-import os
 import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional
+from secrets_manager import get_secret
 
-# Service-specific JWT secrets (in production, these would come from a secure vault)
+# Service-specific JWT secrets (loaded from Infisical vault in production)
 SERVICE_JWT_SECRETS = {
-    "client_index": os.environ.get("CLIENT_INDEX_JWT_SECRET", "client_index_secret_change_in_prod"),
-    "payments": os.environ.get("PAYMENTS_JWT_SECRET", "payments_secret_change_in_prod"),
-    "data_handling": os.environ.get("DATA_HANDLING_JWT_SECRET", "data_handling_secret_change_in_prod"),
-    "auditor": os.environ.get("AUDITOR_JWT_SECRET", "auditor_secret_change_in_prod"),
-    "watchdog": os.environ.get("WATCHDOG_JWT_SECRET", "watchdog_secret_change_in_prod"),
-    "orchestrator": os.environ.get("ORCHESTRATOR_JWT_SECRET", "orchestrator_secret_change_in_prod"),
+    "client_index": get_secret("CLIENT_INDEX_JWT_SECRET", "client_index_secret_change_in_prod"),
+    "payments": get_secret("PAYMENTS_JWT_SECRET", "payments_secret_change_in_prod"),
+    "data_handling": get_secret("DATA_HANDLING_JWT_SECRET", "data_handling_secret_change_in_prod"),
+    "auditor": get_secret("AUDITOR_JWT_SECRET", "auditor_secret_change_in_prod"),
+    "watchdog": get_secret("WATCHDOG_JWT_SECRET", "watchdog_secret_change_in_prod"),
+    "orchestrator": get_secret("ORCHESTRATOR_JWT_SECRET", "orchestrator_secret_change_in_prod"),
 }
 
 # Shared secret for backward compatibility with existing frontend
-LEGACY_JWT_SECRET = os.environ.get("JWT_SECRET", "your_jwt_secret_here_change_this_in_production")
-JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
-TOKEN_EXP_MIN = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+LEGACY_JWT_SECRET = get_secret("JWT_SECRET", "your_jwt_secret_here_change_this_in_production")
+JWT_ALGORITHM = get_secret("JWT_ALGORITHM", "HS256")
+TOKEN_EXP_MIN = int(get_secret("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 
 
 def create_service_token(service_name: str, expires_delta: Optional[timedelta] = None) -> str:

@@ -16,6 +16,7 @@ from shared.jwt_utils import create_service_token, verify_service_token, create_
 from shared.security_middleware import verify_service_request, verify_user_request, require_service_auth, require_user_auth
 from shared.database_models import *
 from shared.utils import now_iso, hash_password, verify_password, SUPPORTED_COUNTRIES, DATA_BROKERS, PLANS
+from shared.secrets_manager import init_infisical
 
 # Import local routers
 from .routes import scan_router, findings_router, keywords_router, broker_router
@@ -71,6 +72,7 @@ async def root():
 @app.on_event("startup")
 async def startup_event():
     logger.info("Data Handling Service starting up...")
+    init_infisical()
     logger.info("Data Handling Service started successfully")
 
 # Shutdown event

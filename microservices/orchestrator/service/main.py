@@ -18,6 +18,7 @@ from shared.jwt_utils import create_service_token, verify_service_token
 from shared.security_middleware import verify_service_request, require_service_auth
 from shared.database_models import generate_id, now_iso
 from shared.utils import SUPPORTED_COUNTRIES
+from shared.secrets_manager import init_infisical
 
 # Import local routers
 from .routes import service_router, health_router
@@ -88,6 +89,7 @@ async def root():
 async def startup_event():
     logger.info("Orchestrator Service starting up...")
     logger.info(f"Service startup order: {SERVICE_STARTUP_ORDER}")
+    init_infisical()
     logger.info("Orchestrator Service started successfully")
 
 # Shutdown event

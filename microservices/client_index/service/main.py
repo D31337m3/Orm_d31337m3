@@ -16,6 +16,7 @@ from shared.jwt_utils import create_service_token, verify_service_token, create_
 from shared.security_middleware import verify_service_request, verify_user_request, require_service_auth, require_user_auth
 from shared.database_models import *
 from shared.utils import now_iso, hash_password, verify_password, SUPPORTED_COUNTRIES, LEGAL_TEMPLATES, _fill_template
+from shared.secrets_manager import init_infisical
 
 # Import local routers
 from .routes import auth_router, user_router, profile_router
@@ -69,6 +70,7 @@ async def root():
 @app.on_event("startup")
 async def startup_event():
     logger.info("Client Index Service starting up...")
+    init_infisical()
     # In a real implementation, you would initialize database connections here
     logger.info("Client Index Service started successfully")
 

@@ -7,3 +7,4 @@ passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 stripe==8.0.0
 web3==6.11.0
+infisical-python==2.2.0
