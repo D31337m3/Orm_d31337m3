@@ -188,6 +188,16 @@ const PRIVACY_VARIANTS = [
   "PR0T3CT Y0UR PR1VACY FR0M 7H3 N37",
 ];
 
+const LAUNCH_ANNOUNCEMENT_PREVIEW =
+  "We are excited to announce a major platform release focused on reliability, security, and launch readiness.";
+
+const LAUNCH_ANNOUNCEMENT_FULL = [
+  "This launch ships a fully service-oriented API platform in production-ready form, with stronger resilience safeguards, improved security posture, and expanded operational visibility.",
+  "For customers, this means more stable authentication, billing, monitoring, and support flows, with no action required to continue using the platform.",
+  "Launch readiness controls are in place: health gates are passing, deployment and rollback runbooks are updated, and release/audit evidence has been documented for go-live review.",
+  "We will continue improving performance, observability, and support tooling in upcoming iterations while keeping reliability and security as top priorities.",
+];
+
 function sampleHeroText() {
   const pool = Math.random() > 0.74 ? PRIVACY_VARIANTS : HERO_VARIANTS;
   return pool[Math.floor(Math.random() * pool.length)];
@@ -195,6 +205,7 @@ function sampleHeroText() {
 
 export default function Landing() {
   const [dialog, setDialog] = useState(null);
+  const [announcementExpanded, setAnnouncementExpanded] = useState(false);
   const [heroText, setHeroText] = useState("D31337 YOURSELF");
   const [displayText, setDisplayText] = useState(heroText);
   const [nowTs, setNowTs] = useState(Date.now());
@@ -522,6 +533,32 @@ export default function Landing() {
           <div className="font-mono text-xs text-zinc-500 text-right">
             Coverage: <span className="text-white">🇨🇦 Canada · 🇺🇸 United States · 🇲🇽 México</span>
           </div>
+        </div>
+      </section>
+
+      {/* Launch announcement */}
+      <section className="border-b border-[#222] bg-black py-12 px-8" id="launch-announcement">
+        <div className="max-w-7xl mx-auto brutal-card p-8">
+          <div className="overline text-[#FF3333] mb-3">// launch announcement</div>
+          <h3 className="font-display font-black text-3xl tracking-tight mb-4">Production Launch Update</h3>
+          <p className="font-mono text-zinc-300 leading-relaxed">{LAUNCH_ANNOUNCEMENT_PREVIEW}</p>
+
+          {announcementExpanded && (
+            <div className="mt-4 space-y-4 font-mono text-zinc-400 leading-relaxed">
+              {LAUNCH_ANNOUNCEMENT_FULL.map((paragraph, i) => (
+                <p key={i}>{paragraph}</p>
+              ))}
+            </div>
+          )}
+
+          <button
+            type="button"
+            data-testid="launch-announcement-toggle"
+            className="mt-6 brutal-btn"
+            onClick={() => setAnnouncementExpanded((v) => !v)}
+          >
+            {announcementExpanded ? "Show Less" : "Read Full Announcement"}
+          </button>
         </div>
       </section>
 
