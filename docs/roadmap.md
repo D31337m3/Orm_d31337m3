@@ -1,44 +1,34 @@
 # Roadmap
 
-This roadmap outlines planned milestones and features for Orm_d31337m3.
+This roadmap reflects the current microservices-based implementation.
 
 ## Near Term (0-3 months)
 
-- Stabilize deployment and documentation
-  - Finalize Nginx configuration and TLS onboarding
-  - Add CI checks for linting and basic tests
-- Improve developer experience
-  - Add `Makefile` or simple scripts for common tasks
-  - Document local dev flow in `docs/architecture.md`
-- Basic analytics and monitoring
-  - Add logging, error reporting, and a lightweight metrics endpoint
+- Operational hardening
+  - Finalize production runbooks and on-call handoff
+  - Add CI checks for backend/frontend builds and smoke tests
+  - Validate backup/restore and rollback drills
+- Admin control surface
+  - Continue expanding admin operations for service and payment workflows
+  - Improve telemetry visibility and incident diagnostics
 
 ## Mid Term (3-9 months)
 
-- User features
-  - Authentication hardening (2FA, account recovery flows)
-  - Admin dashboard for managing users and data
-- Performance and scaling
-  - Production static asset pipeline (CDN integration)
-  - Horizontal scaling for backend services
-- Security improvements
-  - Automated vulnerability scanning and dependency pinning
-  - Secrets management integration (Vault or cloud provider secrets)
+- Reliability and scale
+  - Add stronger observability (metrics, tracing, alert routing)
+  - Improve service resilience and graceful degradation patterns
+- Security maturity
+  - Secrets lifecycle automation and periodic rotation
+  - Dependency and container vulnerability scanning in CI/CD
 
 ## Long Term (9-18 months)
 
-- Multi-region deployment and high availability
-- Advanced observability (tracing, distributed metrics)
-- Modular plugin system to extend core functionality
+- High availability and multi-region architecture
+- Formal SLO/SLI program with error budgets
+- Extended enterprise controls (multi-tenant and policy enforcement)
 
 ## Milestones
 
-- M1: Production-ready site with TLS, CI, and basic monitoring
-- M2: Auth + Admin features + documented backup/recovery
-- M3: Scalable deployment and observability stack
-
-## How to contribute to the roadmap
-
-- Open an issue describing the feature and suggested design
-- Link relevant PRs and label them with `roadmap` and `milestone` tags
-- Participate in planning discussions via issues or project board
+- M1: Stable microservices production operations with validated runbooks
+- M2: Advanced admin controls + full observability baseline
+- M3: Scale/HA and enterprise security posture improvements

@@ -1,7 +1,8 @@
 """\"\"
+"""
 Example showing how to use the Payments Service
 Demonstrates payment processing and subscription management
-\"\"\"
+"""
 
 import os
 import sys
@@ -16,25 +17,25 @@ from shared.jwt_utils import create_service_token, verify_service_token
 from shared.security_middleware import verify_service_request
 
 # Service-specific secrets (should come from environment variables in production)
-PAYMENTS_JWT_SECRET = os.environ.get(\"PAYMENTS_JWT_SECRET\", \"change-me-in-production\")
-CLIENT_INDEX_JWT_SECRET = os.environ.get(\"CLIENT_INDEX_JWT_SECRET\", \"change-me-in-production\")
+PAYMENTS_JWT_SECRET = os.environ.get("PAYMENTS_JWT_SECRET", "change-me-in-production")
+CLIENT_INDEX_JWT_SECRET = os.environ.get("CLIENT_INDEX_JWT_SECRET", "change-me-in-production")
 
 async def example_payment_processing():
-    \"\"\"Example of how to process a payment through the payments service\"\"\"
+    """Example of how to process a payment through the payments service"""
     
     # Create a service-to-service token for the payments service
     token = create_service_token(\"payments\")
-    print(f\"Created service token for payments: {token[:50]}...\")
+    print(f"Created service token for payments: {token[:50]}...")
     
     # Example: Processing an Interac payment
     payment_data = {
-        \"plan_id\": \"pro\",
-        \"payment_method\": \"interac\",
+        "plan_id": "pro",
+        "payment_method": "interac",
         # Note: In a real implementation, user would be obtained from auth token
         # For this example, we're showing the structure
     }
     
-    print(\"\\n=== Payment Processing Example ===\")
+    print("\n=== Payment Processing Example ===")
     print(\"To process a payment, you would:\")
     print(\"1. Authenticate the user (via client_index service)\")
     print(\"2. Call POST /api/payments/ with payment details\")
@@ -45,13 +46,13 @@ async def example_payment_processing():
     print(\"================================\")
 
 async def example_subscription_management():
-    \"\"\"Example of how to manage subscriptions through the payments service\"\"\"
+    """Example of how to manage subscriptions through the payments service"""
     
     # Create a service-to-service token
     token = create_service_token(\"payments\")
-    print(f\"Created service token for payments: {token[:50]}...\")
+    print(f"Created service token for payments: {token[:50]}...")
     
-    print(\"\\n=== Subscription Management Example ===\")
+    print("\n=== Subscription Management Example ===")
     print(\"To manage subscriptions, you would:\")
     print(\"1. Authenticate the user (via client_index service)\")
     print(\"2. Call GET /api/subscriptions/ to get current subscription\")
@@ -61,9 +62,9 @@ async def example_subscription_management():
     print(\"================================\")
 
 async def example_webhook_handling():
-    \"\"\"Example of how webhooks work with the payments service\"\"\"
+    """Example of how webhooks work with the payments service"""
     
-    print(\"\\n=== Webhook Handling Example ===\")
+    print("\n=== Webhook Handling Example ===")
     print(\"The payments service provides webhook endpoints for:\")
     print(\"- Stripe: POST /api/webhooks/stripe\")
     print(\"- Interac: POST /api/webhooks/interac\")
@@ -72,10 +73,10 @@ async def example_webhook_handling():
     print(\"================================\")
 
 def print_service_info():
-    \"\"\"Print information about the service configuration\"\"\"
+    """Print information about the service configuration"""
     print(\"=== Payments Service Configuration ===\")
-    print(f\"Service JWT Secret Configured: {'YES' if PAYMENTS_JWT_SECRET != 'change-me-in-production' else 'NO (using default)'}\")
-    print(f\"Client Index JWT Secret Configured: {'YES' if CLIENT_INDEX_JWT_SECRET != 'change-me-in-production' else 'NO (using default)'}\")
+    print(f"Service JWT Secret Configured: {'YES' if PAYMENTS_JWT_SECRET != 'change-me-in-production' else 'NO (using default)'}")
+    print(f"Client Index JWT Secret Configured: {'YES' if CLIENT_INDEX_JWT_SECRET != 'change-me-in-production' else 'NO (using default)'}")
     print(\"========================================\")
 
 if __name__ == \"__main__\":

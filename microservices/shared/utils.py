@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from urllib.parse import quote_plus
 
+from .database_models import hash_password, verify_password
+
 # Common utility functions
 
 def generate_id() -> str:
@@ -83,6 +85,51 @@ DATA_BROKERS = [
     "PublicRecords", "Acxiom", "Equifax-PrivacyData", "PeekYou",
     "InstantCheckmate", "USSearch",
 ]
+
+# Plans and payment config shared across services.
+PLANS = {
+    "basic": {
+        "id": "basic",
+        "name": "Basic",
+        "price_usd": 29,
+        "keyword_limit": 5,
+        "scan_freq": "weekly",
+    },
+    "pro": {
+        "id": "pro",
+        "name": "Pro",
+        "price_usd": 79,
+        "keyword_limit": 25,
+        "scan_freq": "daily",
+    },
+    "enterprise": {
+        "id": "enterprise",
+        "name": "Enterprise",
+        "price_usd": 199,
+        "keyword_limit": 999,
+        "scan_freq": "realtime",
+    },
+}
+
+CRYPTO_WALLET = os.environ.get("CRYPTO_WALLET", "")
+PAYMENTS_EMAIL = os.environ.get("PAYMENTS_EMAIL", "payments@example.com")
+
+
+async def verify_usdc_tx(network: str, tx_hash: str, expected_amount_usd: float) -> Optional[dict]:
+    """Placeholder verifier for USDC transactions.
+
+    In production this should query on-chain providers and validate token, recipient,
+    amount, and confirmation depth.
+    """
+    if not network or not tx_hash:
+        return None
+    return {
+        "network": network,
+        "tx_hash": tx_hash,
+        "amount_usd": expected_amount_usd,
+        "verified_at": now_iso(),
+        "verification_mode": "placeholder",
+    }
 
 # Legal document templates (shared across services)
 LEGAL_TEMPLATES = {

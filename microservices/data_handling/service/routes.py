@@ -4,7 +4,7 @@ Contains data scraping, enrichment, scan execution, and findings management endp
 """
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, status
-from typing import Optional, List
+from typing import Optional, List, Dict
 import os
 import logging
 import json

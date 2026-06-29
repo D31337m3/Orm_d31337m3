@@ -1,60 +1,81 @@
-# Deploying d31337m3
+# Installation and Deployment
 
-## One-click install (Ubuntu / Debian)
+This repository runs on a React frontend plus a microservices backend.
 
-```bash
-git clone https://github.com/d31337m3/d31337m3.git
-cd d31337m3
-chmod +x install.sh
-sudo ./install.sh
-```
+## Prerequisites
 
-The installer will:
-1. Install Python 3.11, Node 20 LTS, Yarn, MongoDB 7.0, and Supervisor
-2. Prompt you for configuration (admin email/password, SMTP creds, wallet, etc.)
-3. Generate a random `JWT_SECRET`
-4. Write `backend/.env` and `frontend/.env`
-5. Install backend + frontend dependencies
-6. Register the services with supervisor and start them
-7. Configure UFW firewall rules (run `sudo ufw enable` when ready)
-8. Run a health check on both services
+- Linux host with `systemd`
+- Python 3.11+
+- Node.js 18+
+- Nginx installed
 
-When finished, the dashboard is available at:
-- **Frontend** → `http://YOUR_SERVER:3000`
-- **Backend API** → `http://YOUR_SERVER:8001/api`
-
-## Quick re-config
-
-To change settings later, edit `backend/.env` or `frontend/.env` and restart:
+## 1) Clone and install dependencies
 
 ```bash
-sudo supervisorctl restart d31337m3-backend
-sudo supervisorctl restart d31337m3-frontend
+git clone https://github.com/d31337m3-payments/Orm_d31337m3.git
+cd Orm_d31337m3
+
+cd frontend
+npm install
+cd ..
+
+cd microservices
+./install_deps.sh
+cd ..
 ```
 
-## Promo code configuration
-
-The backend supports two promo slots using environment variables:
-
-- `PROMO_CODE_PRIMARY`: primary promo code (default: `OCanada75`)
-- `PROMO_PERCENT_PRIMARY`: primary promo discount percentage (default: `75`)
-- `PROMO_EXPIRES_PRIMARY`: primary promo expiration date in `YYYY-MM-DD` format (default: `2026-12-31`)
-- `PROMO_CODE_SECONDARY`: optional secondary promo code
-- `PROMO_PERCENT_SECONDARY`: optional secondary promo percentage
-- `PROMO_EXPIRES_SECONDARY`: optional secondary promo expiration date
-
-After editing `backend/.env`, restart the backend service:
+## 2) Configure Nginx
 
 ```bash
-sudo supervisorctl restart d31337m3-backend
+sudo ./setup-nginx.sh
 ```
 
-## Production hardening checklist
+This enables the repo nginx site and routes `/api/*` to `orchestrator` (`127.0.0.1:8006`).
 
-- [ ] Put Nginx in front of ports 3000 and 8001 with Let's Encrypt for HTTPS
-- [ ] Disable `--reload` in `/etc/supervisor/conf.d/d31337m3-backend.conf`
-- [ ] Run `cd frontend && yarn build` and serve `frontend/build/` with Nginx instead of `yarn start`
-- [ ] Enable UFW: `sudo ufw enable`
-- [ ] Set up MongoDB auth: `mongosh` → create user, then add `?authSource=admin` to `MONGO_URL`
-- [ ] Add SPF / DKIM / DMARC records for d31337m3.com to maximize SMTP deliverability
-- [ ] Schedule a daily Mongo backup: `mongodump --db d31337m3_db --out /var/backups/...`
+## 3) Install microservices as boot-persistent systemd units
+
+```bash
+cd microservices
+./systemd/install_systemd_services.sh
+```
+
+## 4) Validate deployment gate
+
+```bash
+cd microservices
+./gate_check.sh
+```
+
+## 5) Rollback (if needed)
+
+```bash
+cd microservices
+./rollback.sh
+```
+
+## Service Ports
+
+- `client_index` -> `8002`
+- `payments` -> `8003`
+- `data_handling` -> `8004`
+- `auditor` -> `8005`
+- `orchestrator` -> `8006`
+- `watchdog` -> `8007`
+
+## Operational Commands
+
+Check all unit states:
+
+```bash
+for s in auditor client-index data-handling payments watchdog orchestrator; do
+  unit="d31337m3-${s}.service"
+  printf '%s enabled=%s active=%s\n' "$unit" "$(systemctl is-enabled "$unit")" "$(systemctl is-active "$unit")"
+done
+```
+
+Inspect Nginx:
+
+```bash
+sudo nginx -t
+sudo nginx -T
+```

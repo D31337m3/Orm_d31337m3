@@ -1,32 +1,40 @@
 # Contributing
 
-Thanks for considering contributing! A few guidelines to get started:
+Thanks for contributing.
 
-- Fork the repository and open a pull request for changes.
-- Follow existing code style and add tests for new features or bug fixes.
-- For security-related issues, do not open a public issue — contact the maintainers directly (add contact info here).
+## Development Workflow
 
-Development workflow
+### Frontend
 
 ```bash
-# backend
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-pytest
-
-# frontend
 cd frontend
 npm install
-npm test
+npm run build
 ```
 
-Review process
+### Microservices
 
-- PRs should include a short description and testing instructions.
-- Maintain backwards compatibility where possible and document breaking changes.
+```bash
+cd microservices
+./install_deps.sh
+./start_all.sh
+./health_check.sh
+./stop_all.sh
+```
 
-License and CLA
+## Testing Expectations
 
-- Ensure your contributions comply with the project license.
+- Verify frontend builds successfully.
+- Verify microservices health checks pass.
+- Include reproduction and verification steps in your PR description.
+- For production-impacting changes, include gate/rollback considerations.
+
+## Pull Requests
+
+- Keep changes focused and documented.
+- Update related docs when behavior changes.
+- Do not include secrets or sensitive environment files.
+
+## Security Issues
+
+Do not file sensitive security issues publicly. Contact maintainers directly through the configured private channel.

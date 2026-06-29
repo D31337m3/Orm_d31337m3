@@ -113,9 +113,8 @@ Required infra controls:
 1. Freeze schema changes before migration window.
 2. Take verified backup and restore test in staging.
 3. Run forward migrations.
-4. Run dual-write window (if needed) between monolith and microservices.
-5. Validate record counts and checksums on critical tables.
-6. Cut read path to microservices only after parity checks pass.
+4. Validate record counts and checksums on critical tables.
+5. Cut read path to orchestrator-routed microservices only after parity checks pass.
 
 ## 7. Deployment Strategy
 

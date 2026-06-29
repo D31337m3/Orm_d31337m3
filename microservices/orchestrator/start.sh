@@ -19,6 +19,7 @@ export INFISICAL_SECRETS_PATH=${INFISICAL_SECRETS_PATH:-"/"}
 
 # Service port
 export SERVICE_PORT=${SERVICE_PORT:-"8006"}
+export PYTHONPATH=${PYTHONPATH:-"/home/D31337m3/Orm_d31337m3/microservices"}
 
 # Start the service
 echo "Starting Orchestrator Service on port $SERVICE_PORT"

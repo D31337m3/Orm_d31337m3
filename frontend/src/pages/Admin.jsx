@@ -10,6 +10,7 @@ import AdminAnalytics from "@/components/AdminAnalytics";
 import AdminHealth from "@/components/AdminHealth";
 import AdminBrokerContacts from "@/components/AdminBrokerContacts";
 import AdminSettings from "@/components/AdminSettings";
+import AdminOperations from "@/components/AdminOperations";
 
 const Stat = ({ label, value, testid }) => (
   <div className="brutal-card p-5" data-testid={testid}>
@@ -230,6 +231,7 @@ export default function Admin() {
 
       <div className="flex gap-2 mb-4 flex-wrap" data-testid="admin-tabs">
         {[
+          ["operations","Operations"],
           ["analytics","Analytics"],
           ["health","Health"],
           ["payments","Payments"],
@@ -249,6 +251,7 @@ export default function Admin() {
       </div>
 
       {tab === "analytics" && <AdminAnalytics />}
+      {tab === "operations" && <AdminOperations />}
       {tab === "health" && <AdminHealth />}
       {tab === "brokers" && <AdminBrokerContacts />}
       {tab === "settings" && <AdminSettings />}

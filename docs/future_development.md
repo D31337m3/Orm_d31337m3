@@ -1,47 +1,33 @@
 # Future Development
 
-This document is a collection of ideas and plans for future development directions. We welcome contributions and feedback from the community. Please submit issues or pull requests for any suggestions or improvements.
+This document tracks forward-looking engineering and product work beyond the current baseline.
 
-## Architecture Improvements
+## Backend and Platform
 
-- Integrating microservices into a refactored front end build, ensuring alignment with the backend services.
-- make sure the frontend and backend are properly aligned with the microservices architecture.
--
+- Stronger service contracts (versioned APIs and compatibility tests)
+- Event-driven patterns for cross-service workflows where appropriate
+- Service mesh or equivalent policy layer if operational complexity grows
 
-## Developer Productivity
+## Frontend and Admin Console
 
-- Add a `Makefile` or `task` commands for common flows: `make dev`, `make test`, `make build`.
-- Add GitHub Actions CI workflows for linting, testing, and dependency scanning.
+- Expand admin operations into guided workflows (maintenance, diagnostics, payment triage)
+- Improve role-based views for support vs super-admin actions
+- Add richer telemetry dashboards and action audit trails in UI
 
-## Observability & Reliability
+## Reliability and Operations
 
-- Integrate OpenTelemetry for distributed tracing and Prometheus/Grafana for metrics.
-- Define SLOs and alerting rules; implement synthetic checks and uptime monitoring.
+- Expand synthetic checks and canary verification automation
+- Introduce centralized metrics dashboards and alert tuning
+- Add chaos/resilience exercises for critical service dependencies
 
-## Advanced Security & Privacy
+## Security and Privacy
 
-- Harden defaults with automated policy checks (CIS benchmarks, infrastructure as code scanning).
-- Implement token introspection and centralized auth for microservices.
+- Strengthen secret-management integration and rotation automation
+- Improve PII discovery and redaction controls in logs
+- Add policy-as-code checks for deployment/runtime hardening
 
-## Data & ML Opportunities
+## Developer Experience
 
-- Define anonymized analytics pipelines for product improvement while preserving privacy.
-- Consider ML-based monitoring for anomaly detection in traffic or user behavior (privacy-first approach).
-
-## Internationalization & Accessibility
-
-- Plan for localization and accessibility improvements to reach wider audiences.
-
-## Monetization & Enterprise Features
-
-- Add multi-tenant support, role-based access controls, and invoicing/billing integrations for enterprise needs.
-
-## Open Questions
-
-- When to introduce schema migrations vs manual SQL in production?
-- Which managed cloud services (DB, cache, secrets) are chosen for long-term cost/maintenance tradeoffs?
-
-## Next Steps
-
-- Prioritize feature requests from users and stakeholders and map them to roadmap milestones.
-- Keep this file as a live notes area for future proposals and RFCs.
+- Add repeatable local dev bootstrap for frontend + microservices + nginx checks
+- Expand test coverage for critical auth/payment/audit paths
+- Add release checklists to CI so go-live gates are machine-validated

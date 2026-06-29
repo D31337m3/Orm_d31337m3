@@ -1,14 +1,17 @@
+from __future__ import annotations
+
 """
 API Routes for Payments Service
 Contains payment processing, subscription management, and webhook endpoints
 """
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, status
-from typing import Optional, List
+from typing import Optional, List, Dict, Literal
 import os
 import logging
 import json
 from datetime import datetime, timedelta
+from pydantic import BaseModel
 
 # Import shared components
 import sys
@@ -26,10 +29,22 @@ from shared.utils import now_iso, hash_password, verify_password, SUPPORTED_COUN
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger("payments.routes")
 
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@example.com")
+
 # Create routers
 payment_router = APIRouter()
 subscription_router = APIRouter()
 webhook_router = APIRouter()
+
+
+class SubscribeIn(BaseModel):
+    plan_id: Literal["basic", "pro", "enterprise"]
+    payment_method: Literal["interac", "stripe", "crypto"]
+    network: Optional[Literal["ethereum", "polygon", "base"]] = None
+    tx_hash: Optional[str] = None
+    stripe_payment_intent_id: Optional[str] = None
+    stripe_client_secret: Optional[str] = None
+    note: Optional[str] = None
 
 # Mock database functions (in a real implementation, these would connect to actual databases)
 async def get_user_by_email(email: str):
@@ -355,20 +370,6 @@ async def send_email_mock(to: str, subject: str, body: str, attachments: Optiona
     # In production, this would be replaced with real email sending
     print(f"[EMAIL-MOCK] to={to} subject={subject!r}")
     return True
-
-# Pydantic models (imported from shared or defined locally)
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, Literal
-from datetime import datetime
-
-class SubscribeIn(BaseModel):
-    plan_id: Literal["basic", "pro", "enterprise"]
-    payment_method: Literal["interac", "stripe", "crypto"]
-    network: Optional[Literal["ethereum", "polygon", "base"]] = None
-    tx_hash: Optional[str] = None
-    stripe_payment_intent_id: Optional[str] = None
-    stripe_client_secret: Optional[str] = None
-    note: Optional[str] = None
 
 # Re-export shared models for convenience
 from shared.database_models import (

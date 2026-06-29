@@ -1,14 +1,15 @@
 # Docs
 
-This folder contains project documentation: architecture notes, deployment guidance, and security & privacy information.
+This folder contains current implementation and operations documentation.
 
 Files:
 
-- `security_and_privacy.md` — Security controls, privacy protections, and operational steps.
-- `architecture.md` — High-level architecture and deployment notes.
-- `roadmap.md` — Project milestones and feature planning.
-- `future_development.md` — Long-term directions and future improvements.
-- `plan_microservices.md` — Detailed microservices refactor plan. * completed the initial refactor plan and now the next step is to implement the microservices architecture and align the front end with the new backend structure. as defined in agent_go_live_microservices.md
-- `agent_go_live_microservices.md` — Final production go-live execution guideline for microservices.
+- `security_and_privacy.md` — Security controls and privacy practices.
+- `agent_go_live_microservices.md` — Detailed go-live guide for microservices rollout.
+- `go_live_quick_runbook.md` — One-page cutover checklist for live deployment windows.
+- `roadmap.md` — Delivery milestones and near/mid/long-term targets.
+- `future_development.md` — Forward-looking technical and product directions.
 
-Add more docs here as the project grows (architecture, API reference, runbooks).
+Related operational docs:
+
+- `microservices/README.md` — Day-to-day backend operations (install/start/stop/systemd/gate/rollback).

@@ -1,0 +1,17 @@
+[Unit]
+Description=d31337m3 Data Handling Microservice
+After=network-online.target d31337m3-client-index.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=D31337m3
+WorkingDirectory=/home/D31337m3/Orm_d31337m3/microservices/data_handling
+Environment=PYTHONPATH=/home/D31337m3/Orm_d31337m3/microservices
+Environment=SERVICE_PORT=8004
+ExecStart=/home/D31337m3/Orm_d31337m3/microservices/.venv/bin/uvicorn service.main:app --host 127.0.0.1 --port 8004
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

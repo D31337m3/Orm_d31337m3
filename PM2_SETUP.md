@@ -1,61 +1,20 @@
-# PM2 Configuration for Frontend and Backend
+# PM2 Setup (Legacy)
 
-## Files Created
+This file is kept only for historical context.
 
-1. `ecosystem.config.js` - PM2 configuration file for both frontend and backend
-2. `/microservices/` - Directory containing OpenAPI specifications for all microservices (Stage 1 complete)
+## Current Status
 
-## Services Configuration
+PM2 is no longer the primary production process manager for backend services.
+Production backend runs as `systemd` services under `microservices/systemd/*.service`.
 
-### Backend
-- **Name**: backend
-- **Script**: ./backend/server.py
-- **Interpreter**: python3
-- **Port**: 8000
-- **Environment**: development
+## Use Instead
 
-### Frontend
-- **Name**: frontend
-- **Script**: ./frontend/node_modules/react-scripts/scripts/start.js
-- **Port**: 3000
-- **Environment**: development
+Use the microservices operations docs:
 
-## Usage
+- `microservices/README.md`
+- `docs/agent_go_live_microservices.md`
+- `docs/go_live_quick_runbook.md`
 
-### Install PM2 (if not already installed)
-```bash
-npm install -g pm2
-```
+## If You Still Need PM2 (Development Only)
 
-### Start both applications
-```bash
-pm2 start ecosystem.config.js
-```
-
-### Monitor applications
-```bash
-pm2 monitor
-```
-
-### View logs
-```bash
-pm2 logs
-```
-
-### Stop all applications
-```bash
-pm2 stop all
-```
-
-### Delete all applications from PM2
-```bash
-pm2 delete all
-```
-
-## Microservices Status
-
-**Stage 1 Complete**: Service boundaries and APIs have been defined
-- Created OpenAPI specifications for all 6 microservices
-- Next stage: Establish security boundaries
-
-See `/microservices/STAGE_1_COMPLETE.md` for more details.
+PM2 can still be used manually for ad-hoc development experiments, but it is not part of the supported production deployment path.

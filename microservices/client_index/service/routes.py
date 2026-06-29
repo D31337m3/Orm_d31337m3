@@ -3,7 +3,7 @@ API Routes for Client Index Service
 Contains authentication, user management, and profile endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundRequests, Request, status
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 import os
