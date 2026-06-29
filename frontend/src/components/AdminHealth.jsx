@@ -30,7 +30,11 @@ export default function AdminHealth() {
       const r = await api.post("/admin/health/smtp-test", { to: testEmail });
       setTestResult(r.data.ok ? `✓ Sent to ${testEmail} (check the Email Log)` : `✗ Failed (see Email Log)`);
     } catch (e) {
-      setTestResult(`✗ ${e.response?.data?.detail || "Failed"}`);
+      const detail = String(e.response?.data?.detail || "Failed");
+      const normalized = /no matching row found|no row was found/i.test(detail)
+        ? "No records available yet."
+        : detail;
+      setTestResult(`✗ ${normalized}`);
     }
   };
 

@@ -44,6 +44,8 @@ start_service auditor 8005
 start_service client_index 8002
 start_service data_handling 8004
 start_service payments 8003
+start_service support_hub 8008
+start_service workforce_ops 8009
 start_service watchdog 8007
 start_service orchestrator 8006
 

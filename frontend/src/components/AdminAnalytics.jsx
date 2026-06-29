@@ -46,10 +46,10 @@ export default function AdminAnalytics() {
 
       {/* Time series */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="brutal-card p-6" data-testid="chart-revenue">
+        <div className="brutal-card p-6 min-w-0" data-testid="chart-revenue">
           <div className="overline mb-3">// daily revenue · last 30 days</div>
-          <div className="h-56">
-            <ResponsiveContainer>
+          <div className="h-56 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <AreaChart data={data.timeseries} margin={{ top: 10, right: 10, bottom: 0, left: -25 }}>
                 <defs><linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#00FF41" stopOpacity={0.4}/>
@@ -64,10 +64,10 @@ export default function AdminAnalytics() {
           </div>
         </div>
 
-        <div className="brutal-card p-6" data-testid="chart-signups">
+        <div className="brutal-card p-6 min-w-0" data-testid="chart-signups">
           <div className="overline mb-3">// daily signups · last 30 days</div>
-          <div className="h-56">
-            <ResponsiveContainer>
+          <div className="h-56 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart data={data.timeseries} margin={{ top: 10, right: 10, bottom: 0, left: -25 }}>
                 <XAxis dataKey="d" tick={{ fill: "#71717a", fontSize: 9, fontFamily: "JetBrains Mono" }} axisLine={{ stroke: "#222" }} tickLine={false} tickFormatter={(d) => d.slice(5)} />
                 <YAxis tick={{ fill: "#71717a", fontSize: 10, fontFamily: "JetBrains Mono" }} axisLine={{ stroke: "#222" }} tickLine={false} />
@@ -78,10 +78,10 @@ export default function AdminAnalytics() {
           </div>
         </div>
 
-        <div className="brutal-card p-6" data-testid="chart-findings">
+        <div className="brutal-card p-6 min-w-0" data-testid="chart-findings">
           <div className="overline mb-3">// findings discovered · last 30 days</div>
-          <div className="h-56">
-            <ResponsiveContainer>
+          <div className="h-56 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <LineChart data={data.timeseries} margin={{ top: 10, right: 10, bottom: 0, left: -25 }}>
                 <XAxis dataKey="d" tick={{ fill: "#71717a", fontSize: 9, fontFamily: "JetBrains Mono" }} axisLine={{ stroke: "#222" }} tickLine={false} tickFormatter={(d) => d.slice(5)} />
                 <YAxis tick={{ fill: "#71717a", fontSize: 10, fontFamily: "JetBrains Mono" }} axisLine={{ stroke: "#222" }} tickLine={false} />
@@ -119,10 +119,10 @@ export default function AdminAnalytics() {
 
       {/* Pie charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="brutal-card p-6" data-testid="chart-methods">
+        <div className="brutal-card p-6 min-w-0" data-testid="chart-methods">
           <div className="overline mb-3">// payment method split</div>
-          <div className="h-56">
-            <ResponsiveContainer>
+          <div className="h-56 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie data={data.method_split} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={{ fill: "#fff", fontFamily: "JetBrains Mono", fontSize: 11 }}>
                   {data.method_split.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
@@ -133,10 +133,10 @@ export default function AdminAnalytics() {
           </div>
         </div>
 
-        <div className="brutal-card p-6" data-testid="chart-severity">
+        <div className="brutal-card p-6 min-w-0" data-testid="chart-severity">
           <div className="overline mb-3">// active findings by severity</div>
-          <div className="h-56">
-            <ResponsiveContainer>
+          <div className="h-56 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie data={data.severity_distribution} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70} label={{ fill: "#fff", fontFamily: "JetBrains Mono", fontSize: 11 }}>
                   <Cell fill="#71717a"/><Cell fill="#FFD700"/><Cell fill="#fb923c"/><Cell fill="#FF3333"/>

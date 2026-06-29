@@ -14,6 +14,75 @@ _secrets_cache: Dict[str, str] = {}
 _initialized = False
 
 
+def _build_client(cfg: "InfisicalConfig"):
+    """Create an Infisical client compatible with either SDK variant."""
+    # Legacy SDK variant
+    try:
+        from infisical_python import InfisicalClient as LegacyClient  # type: ignore
+
+        client_kwargs: Dict[str, Any] = {
+            "site_url": cfg.site_url,
+            "environment": cfg.environment,
+        }
+
+        if cfg.service_token:
+            client_kwargs["token"] = cfg.service_token
+        elif cfg.client_id and cfg.client_secret:
+            client_kwargs["client_id"] = cfg.client_id
+            client_kwargs["client_secret"] = cfg.client_secret
+        else:
+            return None
+
+        return LegacyClient(**client_kwargs)
+    except ImportError:
+        pass
+
+    # Current SDK variant
+    try:
+        from infisical_client import InfisicalClient, ClientSettings  # type: ignore
+
+        settings_kwargs: Dict[str, Any] = {
+            "site_url": cfg.site_url,
+        }
+        if cfg.service_token:
+            settings_kwargs["access_token"] = cfg.service_token
+        elif cfg.client_id and cfg.client_secret:
+            settings_kwargs["client_id"] = cfg.client_id
+            settings_kwargs["client_secret"] = cfg.client_secret
+        else:
+            return None
+
+        return InfisicalClient(ClientSettings(**settings_kwargs))
+    except ImportError:
+        raise
+
+
+def _list_secrets(client, cfg: "InfisicalConfig"):
+    """List secrets across both SDK variants and normalize to an iterable."""
+    if hasattr(client, "list_secrets"):
+        return client.list_secrets(
+            environment=cfg.environment,
+            path=cfg.secrets_path,
+            project_id=cfg.project_id,
+        )
+
+    from infisical_client import schemas  # type: ignore
+
+    opts = schemas.ListSecretsOptions(
+        environment=cfg.environment,
+        project_id=cfg.project_id,
+        path=cfg.secrets_path,
+    )
+    return client.listSecrets(opts)
+
+
+def _extract_secret_fields(secret) -> tuple[Optional[str], Optional[str]]:
+    """Extract secret key/value across SDK response shapes."""
+    key = getattr(secret, "secret_key", None) or getattr(secret, "secretKey", None)
+    val = getattr(secret, "secret_value", None) or getattr(secret, "secretValue", None)
+    return key, val
+
+
 @dataclass
 class InfisicalConfig:
     site_url: str = field(default_factory=lambda: os.environ.get("INFISICAL_SITE_URL", "https://app.infisical.com"))
@@ -33,20 +102,14 @@ def init_infisical(config: Optional[InfisicalConfig] = None) -> None:
 
     cfg = config or InfisicalConfig()
 
+    if not cfg.project_id:
+        logger.warning("INFISICAL_PROJECT_ID is empty. Falling back to environment variables.")
+        return
+
     try:
-        from infisical_python import InfisicalClient
+        client = _build_client(cfg)
 
-        client_kwargs: Dict[str, Any] = {
-            "site_url": cfg.site_url,
-            "environment": cfg.environment,
-        }
-
-        if cfg.service_token:
-            client_kwargs["token"] = cfg.service_token
-        elif cfg.client_id and cfg.client_secret:
-            client_kwargs["client_id"] = cfg.client_id
-            client_kwargs["client_secret"] = cfg.client_secret
-        else:
+        if not client:
             logger.warning(
                 "No Infisical credentials configured. "
                 "Falling back to environment variables. "
@@ -54,16 +117,12 @@ def init_infisical(config: Optional[InfisicalConfig] = None) -> None:
             )
             return
 
-        client = InfisicalClient(**client_kwargs)
-
-        secrets = client.list_secrets(
-            environment=cfg.environment,
-            path=cfg.secrets_path,
-            project_id=cfg.project_id,
-        )
+        secrets = _list_secrets(client, cfg)
 
         for secret in secrets:
-            _secrets_cache[secret.secret_key] = secret.secret_value
+            key, value = _extract_secret_fields(secret)
+            if key is not None and value is not None:
+                _secrets_cache[key] = value
 
         _initialized = True
         logger.info(
@@ -73,7 +132,7 @@ def init_infisical(config: Optional[InfisicalConfig] = None) -> None:
 
     except ImportError:
         logger.warning(
-            "infisical-python package not installed. "
+            "No supported Infisical SDK installed. "
             "Install with: pip install infisical-python"
         )
     except Exception as e:
@@ -89,36 +148,35 @@ def get_secret(key: str, default: Optional[str] = None) -> Optional[str]:
 
 def load_service_secrets(service_name: str) -> Dict[str, str]:
     cfg = InfisicalConfig()
+    if not cfg.project_id:
+        return {}
+
     secrets_path = f"/{service_name}" if cfg.secrets_path == "/" else f"{cfg.secrets_path}/{service_name}"
 
     try:
-        from infisical_python import InfisicalClient
+        client = _build_client(cfg)
 
-        client_kwargs: Dict[str, Any] = {
-            "site_url": cfg.site_url,
-            "environment": cfg.environment,
-        }
-
-        if cfg.service_token:
-            client_kwargs["token"] = cfg.service_token
-        elif cfg.client_id and cfg.client_secret:
-            client_kwargs["client_id"] = cfg.client_id
-            client_kwargs["client_secret"] = cfg.client_secret
-        else:
+        if not client:
             return {}
 
-        client = InfisicalClient(**client_kwargs)
-
-        service_secrets = client.list_secrets(
-            environment=cfg.environment,
-            path=secrets_path,
+        # Use temporary config to target a service-specific path.
+        service_cfg = InfisicalConfig(
+            site_url=cfg.site_url,
+            client_id=cfg.client_id,
+            client_secret=cfg.client_secret,
+            service_token=cfg.service_token,
             project_id=cfg.project_id,
+            environment=cfg.environment,
+            secrets_path=secrets_path,
         )
+        service_secrets = _list_secrets(client, service_cfg)
 
         result = {}
         for secret in service_secrets:
-            result[secret.secret_key] = secret.secret_value
-            _secrets_cache[secret.secret_key] = secret.secret_value
+            key, value = _extract_secret_fields(secret)
+            if key is not None and value is not None:
+                result[key] = value
+                _secrets_cache[key] = value
 
         return result
 

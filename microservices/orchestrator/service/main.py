@@ -14,14 +14,14 @@ from typing import Dict, List, Optional
 import sys
 sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
 
-from shared.jwt_utils import create_service_token, verify_service_token
-from shared.security_middleware import verify_service_request, require_service_auth
+from shared.jwt_utils import create_service_token, verify_service_token, verify_user_token, create_user_token
+from shared.security_middleware import verify_service_request, require_service_auth, verify_user_request
 from shared.database_models import generate_id, now_iso
 from shared.utils import SUPPORTED_COUNTRIES
 from shared.secrets_manager import init_infisical
 
 # Import local routers
-from .routes import service_router, health_router
+from .routes import service_router, health_router, admin_router, support_router, workforce_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -46,6 +46,9 @@ app.add_middleware(
 # Include routers
 app.include_router(service_router, prefix="/api/services", tags=["services"])
 app.include_router(health_router, prefix="/api/health", tags=["health"])
+app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
+app.include_router(support_router, prefix="/api/support", tags=["support"])
+app.include_router(workforce_router, prefix="/api/workforce", tags=["workforce"])
 
 # Service registry (in production, this would be more sophisticated)
 SERVICE_REGISTRY: Dict[str, dict] = {}

@@ -8,3 +8,4 @@ python-dotenv==1.0.0
 motor==3.3.2
 bcrypt==4.1.2
 infisical-python==2.2.0
+sqlalchemy==2.0.23

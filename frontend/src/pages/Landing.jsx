@@ -128,7 +128,7 @@ const FEATURES = [
   },
 ];
 
-const Plan = ({ id, name, price, features, highlight }) => (
+const Plan = ({ id, name, price, features, highlight, launchLive, waitlistHref = "#waitlist" }) => (
   <motion.div
     initial={{ opacity: 0, y: 30 }}
     whileInView={{ opacity: 1, y: 0 }}
@@ -141,15 +141,36 @@ const Plan = ({ id, name, price, features, highlight }) => (
     {highlight && <div className="overline text-[#FF3333] mb-3">// recommended</div>}
     <div className="font-display font-black text-3xl mb-1">{name}</div>
     <div className="font-mono text-zinc-500 mb-6">/* {id} */</div>
-    <div className="font-display font-black text-5xl mb-1">${price}<span className="text-lg text-zinc-500">/mo</span></div>
+    {(() => {
+      const discountedPrice = (price * 0.25).toFixed(2).replace(/\.00$/, "");
+      return (
+    <div className="relative inline-flex items-end gap-4 mb-1">
+      <div className="relative">
+        <span className="absolute -top-3 left-0 z-10 -rotate-6 rounded-full border border-[#00FF41] bg-[#020202] px-3 py-1 font-mono text-[10px] font-black uppercase tracking-[0.3em] text-[#FF4FD8] shadow-[0_0_12px_rgba(255,79,216,0.8),0_0_18px_rgba(0,255,65,0.55)]">
+          now ${discountedPrice}/mo
+        </span>
+        <div className="font-display font-black text-5xl text-zinc-500 line-through decoration-[#FF3333] decoration-4 decoration-wavy decoration-slice">
+          ${price}<span className="text-lg text-zinc-500">/mo</span>
+        </div>
+      </div>
+      <div className="pb-1 font-mono text-sm font-black uppercase tracking-[0.35em] text-[#00FF41] drop-shadow-[0_0_10px_rgba(0,255,65,0.75)]">
+        75% off
+      </div>
+    </div>
+      );
+    })()}
     <ul className="mt-6 space-y-3 mb-8">
       {features.map(f => <li key={f} className="font-mono text-sm text-zinc-300 flex gap-2"><span className="text-[#FF3333]">›</span>{f}</li>)}
     </ul>
-    <Link to="/register" data-testid={`select-plan-${id}`} className={`brutal-btn block text-center ${highlight ? "brutal-btn-primary" : ""}`}>Get Started</Link>
+    {launchLive ? (
+      <Link to="/register" data-testid={`select-plan-${id}`} className={`brutal-btn block text-center ${highlight ? "brutal-btn-primary" : ""}`}>Get Started</Link>
+    ) : (
+      <a href={waitlistHref} data-testid={`select-plan-${id}`} className={`brutal-btn block text-center ${highlight ? "brutal-btn-primary" : ""}`}>Join Waitlist</a>
+    )}
   </motion.div>
 );
 
-const LEET_VARIANTS = [
+const HERO_VARIANTS = [
   "D31337 Y0U753LF",
   "D3L373 Y0UR53LF",
   "D31337 Y0U7531F",
@@ -158,17 +179,50 @@ const LEET_VARIANTS = [
   "D3L373 Y0U753LF FR0M 7H3 N37",
 ];
 
-function sampleLeet() {
-  return LEET_VARIANTS[Math.floor(Math.random() * LEET_VARIANTS.length)];
+const PRIVACY_VARIANTS = [
+  "PR07ECT Y0UR PR1VACY",
+  "PR0T3CT Y0UR PR1V4CY",
+  "PR073CT Y0UR PR1V4CY",
+  "PR0T3CT Y0UR PRIVACY",
+  "PR07ECT Y0UR PRIVACY FR0M 7H3 N37",
+  "PR0T3CT Y0UR PR1VACY FR0M 7H3 N37",
+];
+
+function sampleHeroText() {
+  const pool = Math.random() > 0.74 ? PRIVACY_VARIANTS : HERO_VARIANTS;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 export default function Landing() {
   const [dialog, setDialog] = useState(null);
   const [heroText, setHeroText] = useState("D31337 YOURSELF");
   const [displayText, setDisplayText] = useState(heroText);
+  const [nowTs, setNowTs] = useState(Date.now());
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistNote, setWaitlistNote] = useState("");
   const { scrollY } = useScroll();
   const heroY = useTransform(scrollY, [0, 500], [0, 150]);
   const heroOpacity = useTransform(scrollY, [0, 400], [1, 0.2]);
+
+  const launchDate = new Date("2026-07-01T00:00:00Z");
+  const isLaunchLive = nowTs >= launchDate.getTime();
+  const isEarlyAccess = !isLaunchLive;
+    const julyPromoActive = isLaunchLive && nowTs < new Date("2026-08-01T00:00:00Z").getTime();
+    const signupDiscount = isEarlyAccess ? "75%" : (julyPromoActive ? "50%" : null);
+
+  const countdown = (() => {
+    const diff = Math.max(0, launchDate.getTime() - nowTs);
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+    const minutes = Math.floor((diff / (1000 * 60)) % 60);
+    const seconds = Math.floor((diff / 1000) % 60);
+    return { days, hours, minutes, seconds };
+  })();
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -206,7 +260,7 @@ export default function Landing() {
       const nextDelay = 3000 + Math.floor(Math.random() * 5000);
       glitchTimer = setTimeout(() => {
         if (!mounted) return;
-        const nextText = sampleLeet();
+        const nextText = sampleHeroText();
         setHeroText(nextText);
         glitchTo(nextText);
         scheduleSwap();
@@ -247,8 +301,14 @@ export default function Landing() {
         <div className="flex items-center gap-6 font-mono text-sm">
           <a href="#features" className="text-zinc-400 hover:text-white">Features</a>
           <a href="#pricing" className="text-zinc-400 hover:text-white">Pricing</a>
-          <Link to="/login" data-testid="nav-login" className="text-zinc-400 hover:text-white">Login</Link>
-          <Link to="/register" data-testid="nav-register" className="brutal-btn brutal-btn-primary !py-2 !px-4 text-xs">Start</Link>
+          {isLaunchLive ? (
+            <>
+              <Link to="/login" data-testid="nav-login" className="text-zinc-400 hover:text-white">Login</Link>
+              <Link to="/register" data-testid="nav-register" className="brutal-btn brutal-btn-primary !py-2 !px-4 text-xs">Start</Link>
+            </>
+          ) : (
+            <a href="#waitlist" data-testid="nav-waitlist" className="brutal-btn brutal-btn-primary !py-2 !px-4 text-xs">Join Waitlist</a>
+          )}
         </div>
       </nav>
 
@@ -284,16 +344,125 @@ export default function Landing() {
             <motion.div
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
               className="flex flex-wrap gap-4">
-              <Link to="/register" data-testid="hero-cta-primary" className="brutal-btn brutal-btn-primary">Start Free Trial →</Link>
-              <a href="#features" data-testid="hero-cta-secondary" className="brutal-btn">View Capabilities</a>
+              {isLaunchLive ? (
+                <>
+                  <Link to="/register" data-testid="hero-cta-primary" className="brutal-btn brutal-btn-primary">Start Free Trial →</Link>
+                  <a href="#features" data-testid="hero-cta-secondary" className="brutal-btn">View Capabilities</a>
+                </>
+              ) : (
+                <a href="#waitlist" data-testid="hero-cta-primary" className="brutal-btn brutal-btn-primary">Join Waitlist →</a>
+              )}
             </motion.div>
             <motion.div
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}
               className="mt-8 brutal-card border border-[#FF3333] bg-[#140505] p-5 max-w-xl">
-              <div className="font-display text-2xl mb-2 text-[#FF3333]">Canada Day Launch Special</div>
-              <div className="font-mono text-sm text-zinc-300">
-                Use promo code <span className="text-white font-bold">OCanada75</span> for 75% off for the entire year. Available for a limited time on new signups.
+              <div className="font-display text-2xl mb-2 text-[#FF3333]">
+                {isLaunchLive ? "Canada Day Launch Special" : "Early Access Waitlist"}
               </div>
+              <div className="font-mono text-sm text-zinc-300">
+                {isLaunchLive ? (
+                  <>
+                    {julyPromoActive ? (
+                      <>Register during July and get <span className="text-white font-bold">50% off for 6 months</span>. New signups before July 1 get <span className="text-white font-bold">75% off for 6 months</span> via the waitlist.</>
+                    ) : (
+                      <>Use promo code <span className="text-white font-bold">OCanada75</span> for 75% off for the entire year. Available for a limited time on new signups.</>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    Join the waitlist by July 1 for a <span className="text-white font-bold">75% discount for 6 months</span>. Sign up on or before July 1; users who register during the rest of July get <span className="text-white font-bold">50% off for 6 months</span>.
+                  </>
+                )}
+              </div>
+            </motion.div>
+
+            {isEarlyAccess && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}
+                id="waitlist"
+                className="mt-6 brutal-card border border-[#222] bg-black/70 p-5 max-w-xl">
+                <div className="overline text-[#00FF41] mb-2">// launch countdown</div>
+                <div className="grid grid-cols-4 gap-2 mb-5 font-mono text-center">
+                  <div className="border border-[#222] p-3"><div className="text-2xl text-white font-black">{countdown.days}</div><div className="text-[10px] text-zinc-500 uppercase tracking-widest">Days</div></div>
+                  <div className="border border-[#222] p-3"><div className="text-2xl text-white font-black">{String(countdown.hours).padStart(2, "0")}</div><div className="text-[10px] text-zinc-500 uppercase tracking-widest">Hours</div></div>
+                  <div className="border border-[#222] p-3"><div className="text-2xl text-white font-black">{String(countdown.minutes).padStart(2, "0")}</div><div className="text-[10px] text-zinc-500 uppercase tracking-widest">Min</div></div>
+                  <div className="border border-[#222] p-3"><div className="text-2xl text-white font-black">{String(countdown.seconds).padStart(2, "0")}</div><div className="text-[10px] text-zinc-500 uppercase tracking-widest">Sec</div></div>
+                </div>
+                <div className="font-display text-xl mb-2">Join the waitlist</div>
+                <p className="font-mono text-sm text-zinc-400 mb-4">Sign up before July 1 to lock in <span className="text-white font-bold">{signupDiscount} off for 6 months</span>. Registration stays closed to the public until launch day.</p>
+                <div className="flex flex-col gap-3">
+                  <input
+                    type="email"
+                    value={waitlistEmail}
+                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                    placeholder="you@company.com"
+                    className="brutal-input"
+                    data-testid="waitlist-email"
+                  />
+                  <textarea
+                    value={waitlistNote}
+                    onChange={(e) => setWaitlistNote(e.target.value)}
+                    placeholder="Optional note (role, company, use case)"
+                    className="brutal-input min-h-[88px]"
+                    data-testid="waitlist-note"
+                  />
+                  <button
+                    className="brutal-btn brutal-btn-primary"
+                    data-testid="waitlist-submit"
+                    onClick={() => {
+                      if (!waitlistEmail || !waitlistEmail.includes("@")) {
+                        alert("Enter a valid email address.");
+                        return;
+                      }
+                      const subject = encodeURIComponent("d31337m3 Waitlist Signup");
+                      const body = encodeURIComponent(
+                        `Please add me to the July 1 waitlist.\n\nEmail: ${waitlistEmail}\nNote: ${waitlistNote || "N/A"}\n\nRequested launch offer: ${signupDiscount} for 6 months\n`
+                      );
+                      window.location.href = `mailto:support@d31337m3.com?subject=${subject}&body=${body}`;
+                    }}
+                  >
+                    Join Waitlist
+                  </button>
+                </div>
+                <div className="mt-3 font-mono text-xs text-zinc-500">
+                  {julyPromoActive ? (
+                    <>July launch signups: <span className="text-white">50% off for 6 months</span>. Waitlist signups before launch keep <span className="text-white">75% off for 6 months</span>.</>
+                  ) : (
+                    <>Waitlist registrations before July 1: <span className="text-white">75% off for 6 months</span>.</>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}
+              className="mt-6 flex flex-wrap gap-3 max-w-xl">
+              <a
+                href="#android-app"
+                className="flex min-w-[190px] flex-1 items-center gap-3 rounded-xl border border-[#222] bg-[#090909] px-4 py-3 transition-transform hover:-translate-y-0.5 hover:border-[#FF3333]"
+                data-testid="app-store-badge"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#333] bg-black text-[10px] font-black uppercase tracking-[0.2em] text-[#FF4FD8] shadow-[0_0_12px_rgba(255,79,216,0.25)]">
+                  
+                </span>
+                <span className="font-mono text-left leading-tight">
+                  <span className="block text-[10px] uppercase tracking-[0.35em] text-zinc-500">Download on the</span>
+                  <span className="block text-sm font-black text-white">App Store</span>
+                </span>
+              </a>
+              <a
+                href="#android-app"
+                className="flex min-w-[190px] flex-1 items-center gap-3 rounded-xl border border-[#222] bg-[#090909] px-4 py-3 transition-transform hover:-translate-y-0.5 hover:border-[#00FF41]"
+                data-testid="google-play-badge"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#333] bg-black text-[10px] font-black uppercase tracking-[0.18em] text-[#00FF41] shadow-[0_0_12px_rgba(0,255,65,0.25)]">
+                  ▶
+                </span>
+                <span className="font-mono text-left leading-tight">
+                  <span className="block text-[10px] uppercase tracking-[0.35em] text-zinc-500">Get it on</span>
+                  <span className="block text-sm font-black text-white">Google Play</span>
+                </span>
+              </a>
             </motion.div>
           </div>
 
@@ -387,12 +556,18 @@ export default function Landing() {
       <section id="pricing" className="px-8 py-24 border-t border-[#222] bg-black">
         <div className="max-w-7xl mx-auto">
           <div className="overline text-[#FF3333] mb-4">// pricing</div>
-          <h2 className="font-display font-black text-5xl tracking-tighter mb-4">Pick your plan.</h2>
-          <p className="font-mono text-zinc-500 mb-12">No contracts. Cancel any time. Pay in CAD, USD, or USDC.</p>
+          <h2 className="font-display font-black text-5xl tracking-tighter mb-4">{isLaunchLive ? "Pick your plan." : "Launch pricing reserved for waitlist users."}</h2>
+          <p className="font-mono text-zinc-500 mb-12">
+              {isLaunchLive
+                ? (julyPromoActive
+                  ? "July launch special: sign up during July for 50% off for 6 months."
+                  : "No contracts. Cancel any time. Pay in CAD, USD, or USDC.")
+                : "Registration is closed until July 1. Join the waitlist to lock in launch discounts and first access."}
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Plan id="basic" name="Basic" price={29} features={["5 keywords","Weekly scans","Email alerts","Reputation score"]} />
-            <Plan id="pro" name="Pro" price={79} highlight features={["25 keywords","Daily scans","Email alerts","Removal requests","Legal documents (DMCA, C&D)","Priority queue"]} />
-            <Plan id="enterprise" name="Enterprise" price={199} features={["Unlimited keywords","Real-time scans","Dedicated specialist","API access","White-glove removals","All legal templates"]} />
+            <Plan launchLive={isLaunchLive} id="basic" name="Basic" price={29} features={["5 keywords","Weekly scans","Email alerts","Reputation score"]} />
+            <Plan launchLive={isLaunchLive} id="pro" name="Pro" price={79} highlight features={["25 keywords","Daily scans","Email alerts","Removal requests","Legal documents (DMCA, C&D)","Priority queue"]} />
+            <Plan launchLive={isLaunchLive} id="enterprise" name="Enterprise" price={199} features={["Unlimited keywords","Real-time scans","Dedicated specialist","API access","White-glove removals","All legal templates"]} />
           </div>
         </div>
       </section>

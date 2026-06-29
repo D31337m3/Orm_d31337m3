@@ -50,6 +50,8 @@ export default function AdminTable({ data, columns, filters = [], searchKeys = [
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
   const rows = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+  const hasActiveFilter = Object.values(activeFilters).some(Boolean);
+  const emptyMessage = q.trim() || hasActiveFilter ? "No matching rows." : "No records yet.";
 
   return (
     <div data-testid={testid}>
@@ -91,7 +93,7 @@ export default function AdminTable({ data, columns, filters = [], searchKeys = [
           </tr></thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={columns.length} className="py-8 px-4 font-mono text-zinc-500 text-center">No matching rows.</td></tr>
+              <tr><td colSpan={columns.length} className="py-8 px-4 font-mono text-zinc-500 text-center">{emptyMessage}</td></tr>
             ) : rows.map((r, i) => (
               <tr
                 key={r.id || i}

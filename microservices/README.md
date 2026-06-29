@@ -10,6 +10,8 @@ This directory contains the backend microservices and production-oriented startu
 - `auditor` -> `8005`
 - `orchestrator` -> `8006`
 - `watchdog` -> `8007`
+- `support_hub` -> `8008`
+- `workforce_ops` -> `8009`
 
 ## One-time Setup
 

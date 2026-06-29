@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import CanadaFlag from "@/components/CanadaFlag";
+import SupportChatWidget from "@/components/SupportChatWidget";
 import { LayoutDashboard, KeyRound, Search, CreditCard, ShieldAlert, LogOut, Terminal, FileText } from "lucide-react";
 
 const NavLink = ({ to, icon: Icon, label, testid }) => {
@@ -66,6 +67,8 @@ export default function DashboardLayout({ children, title }) {
         </header>
         <div className="flex-1 p-8 bg-[#0a0a0a]">{children}</div>
       </main>
+
+      <SupportChatWidget />
     </div>
   );
 }

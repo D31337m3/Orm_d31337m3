@@ -15,8 +15,10 @@ sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
 from shared.jwt_utils import create_service_token, verify_service_token, create_user_token, verify_user_token
 from shared.security_middleware import verify_service_request, verify_user_request, require_service_auth, require_user_auth
 from shared.database_models import *
+from shared.database import SessionLocal
+from shared.repositories import UserRepository
 from shared.utils import now_iso, hash_password, verify_password, SUPPORTED_COUNTRIES, LEGAL_TEMPLATES, _fill_template
-from shared.secrets_manager import init_infisical
+from shared.secrets_manager import init_infisical, get_secret
 
 # Import local routers
 from .routes import auth_router, user_router, profile_router
@@ -71,7 +73,38 @@ async def root():
 async def startup_event():
     logger.info("Client Index Service starting up...")
     init_infisical()
-    # In a real implementation, you would initialize database connections here
+
+    # Bootstrap an admin account from secrets when it does not yet exist.
+    admin_email = (get_secret("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "")) or "").strip().lower()
+    admin_password = (get_secret("ADMIN_PASSWORD", os.environ.get("ADMIN_PASSWORD", "")) or "").strip()
+    if admin_email and admin_password:
+        db = SessionLocal()
+        try:
+            existing = UserRepository.get_by_email(db, admin_email)
+            if not existing:
+                UserRepository.create(
+                    db,
+                    {
+                        "email": admin_email,
+                        "name": "Admin",
+                        "password_hash": hash_password(admin_password),
+                        "auth_provider": "password",
+                        "is_admin": True,
+                        "is_active": True,
+                        "plan_id": None,
+                        "subscription_status": "active",
+                        "subscription_started_at": None,
+                    },
+                )
+                logger.info("Bootstrapped admin user from secrets")
+            elif not existing.is_admin:
+                UserRepository.update(db, existing.id, {"is_admin": True})
+                logger.info("Upgraded existing user to admin based on ADMIN_EMAIL")
+        except Exception as e:
+            logger.warning(f"Admin bootstrap warning: {e}")
+        finally:
+            db.close()
+
     logger.info("Client Index Service started successfully")
 
 # Shutdown event

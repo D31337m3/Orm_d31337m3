@@ -90,6 +90,77 @@ export const adminApi = {
     return data?.payments || [];
   },
 
+  async listAuditLog() {
+    const data = await tryGet(["/admin/audit-log"], { audit: [] });
+    return data?.audit || [];
+  },
+
+  async supportAdminChats() {
+    const data = await tryGet(["/support/admin/chats"], { chats: [] });
+    return data?.chats || [];
+  },
+
+  async supportAdminChatMessages(chatId) {
+    const data = await tryGet([`/support/admin/chats/${chatId}/messages`], { messages: [] });
+    return data;
+  },
+
+  async supportAdminSendMessage(chatId, text) {
+    return await tryPost([`/support/admin/chats/${chatId}/messages`], { text }, { ok: false, message: "support reply endpoint unavailable" });
+  },
+
+  async supportAdminTickets() {
+    const data = await tryGet(["/support/admin/tickets"], { tickets: [] });
+    return data?.tickets || [];
+  },
+
+  async supportAdminCreateTicketFromChat(chatId, payload) {
+    return await tryPost([`/support/admin/tickets/from-chat/${chatId}`], payload, { ok: false, message: "ticket-from-chat endpoint unavailable" });
+  },
+
+  async supportAdminPatchTicket(ticketId, payload) {
+    return await tryPatch([`/support/admin/tickets/${ticketId}`], payload, { ok: false, message: "ticket update endpoint unavailable" });
+  },
+
+  async workforceAdminShifts() {
+    const data = await tryGet(["/workforce/admin/shifts"], { shifts: [] });
+    return data?.shifts || [];
+  },
+
+  async workforceAdminCreateShift(payload) {
+    return await tryPost(["/workforce/admin/shifts"], payload, { ok: false, message: "create shift endpoint unavailable" });
+  },
+
+  async workforceAdminPatchShift(shiftId, payload) {
+    return await tryPatch([`/workforce/admin/shifts/${shiftId}`], payload, { ok: false, message: "update shift endpoint unavailable" });
+  },
+
+  async workforceAdminTimesheets() {
+    const data = await tryGet(["/workforce/admin/timesheets"], { timesheets: [] });
+    return data?.timesheets || [];
+  },
+
+  async workforceAdminCreateTimesheet(payload) {
+    return await tryPost(["/workforce/admin/timesheets"], payload, { ok: false, message: "create timesheet endpoint unavailable" });
+  },
+
+  async workforceAdminPatchTimesheet(timesheetId, payload) {
+    return await tryPatch([`/workforce/admin/timesheets/${timesheetId}`], payload, { ok: false, message: "update timesheet endpoint unavailable" });
+  },
+
+  async workforceAdminPayrollRuns() {
+    const data = await tryGet(["/workforce/admin/payroll-runs"], { payroll_runs: [] });
+    return data?.payroll_runs || [];
+  },
+
+  async workforceAdminCreatePayrollRun(payload) {
+    return await tryPost(["/workforce/admin/payroll-runs"], payload, { ok: false, message: "create payroll endpoint unavailable" });
+  },
+
+  async workforceAdminPatchPayrollRun(runId, payload) {
+    return await tryPatch([`/workforce/admin/payroll-runs/${runId}`], payload, { ok: false, message: "update payroll endpoint unavailable" });
+  },
+
   async confirmPayment(paymentId) {
     return await tryPost([
       `/admin/payments/${paymentId}/confirm`,
@@ -111,7 +182,16 @@ export const adminApi = {
       this.getServiceRegistry(),
     ]);
 
-    const critical = ["auditor", "client_index", "data_handling", "payments", "watchdog", "orchestrator"];
+    const critical = [
+      "auditor",
+      "client_index",
+      "data_handling",
+      "payments",
+      "support_hub",
+      "workforce_ops",
+      "watchdog",
+      "orchestrator",
+    ];
     const unhealthy = (seq?.sequence_status || []).filter((s) => s.status && s.status !== "healthy");
 
     return {
@@ -125,6 +205,33 @@ export const adminApi = {
         allHealthy: !!seq?.all_services_healthy,
       },
     };
+  },
+
+  async getOpsCapabilities() {
+    return await tryGet([
+      "/admin/ops/capabilities",
+    ], {
+      host_controls_enabled: false,
+      service_units: {},
+    });
+  },
+
+  async restartService(serviceName) {
+    return await tryPost([
+      `/admin/ops/restart-service/${serviceName}`,
+    ], {}, { ok: false, message: "restart service endpoint unavailable" });
+  },
+
+  async restartAllServices() {
+    return await tryPost([
+      "/admin/ops/restart-all",
+    ], {}, { ok: false, message: "restart-all endpoint unavailable" });
+  },
+
+  async rebootServer() {
+    return await tryPost([
+      "/admin/ops/reboot-server",
+    ], { confirm: "REBOOT_PHYSICAL_SERVER" }, { ok: false, message: "reboot endpoint unavailable" });
   },
 };
 

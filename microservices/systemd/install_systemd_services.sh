@@ -10,6 +10,8 @@ UNITS=(
   d31337m3-client-index.service
   d31337m3-data-handling.service
   d31337m3-payments.service
+  d31337m3-support-hub.service
+  d31337m3-workforce-ops.service
   d31337m3-watchdog.service
   d31337m3-orchestrator.service
 )

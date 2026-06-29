@@ -11,6 +11,8 @@ import AdminHealth from "@/components/AdminHealth";
 import AdminBrokerContacts from "@/components/AdminBrokerContacts";
 import AdminSettings from "@/components/AdminSettings";
 import AdminOperations from "@/components/AdminOperations";
+import AdminSupportPanel from "@/components/AdminSupportPanel";
+import AdminWorkforcePanel from "@/components/AdminWorkforcePanel";
 
 const Stat = ({ label, value, testid }) => (
   <div className="brutal-card p-5" data-testid={testid}>
@@ -27,6 +29,7 @@ export default function Admin() {
   const { user: me, logout } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
+  const [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState("payments");
   const [users, setUsers] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -41,19 +44,60 @@ export default function Admin() {
   const [removalDetail, setRemovalDetail] = useState(null);
   const [documentDetail, setDocumentDetail] = useState(null);
 
+  const EMPTY_STATS = {
+    users: 0,
+    active_subs: 0,
+    keywords: 0,
+    findings_total: 0,
+    findings_active: 0,
+    pending_payments: 0,
+    removal_requests: 0,
+  };
+
+  const normalizeDetail = (detail) => {
+    const raw = String(detail || "");
+    const lower = raw.toLowerCase();
+    if (lower.includes("no matching row found") || lower.includes("no row was found")) {
+      return "No records available yet.";
+    }
+    return raw || "Request failed.";
+  };
+
   const load = async () => {
-    const [s, u, p, e, r, a, d] = await Promise.all([
-      api.get("/admin/stats"),
-      api.get("/admin/users"),
-      api.get("/admin/payments"),
-      api.get("/admin/email-log"),
-      api.get("/admin/removals"),
-      api.get("/admin/audit-log"),
-      api.get("/admin/documents"),
-    ]);
-    setStats(s.data); setUsers(u.data.users); setPayments(p.data.payments);
-    setEmails(e.data.emails); setRemovals(r.data.removals); setAudit(a.data.audit);
-    setDocuments(d.data.documents);
+    const keys = ["stats", "users", "payments", "email-log", "removals", "audit-log", "documents"];
+    const results = await Promise.allSettled(keys.map((k) => api.get(`/admin/${k}`)));
+
+    const dataFor = (idx, fallback) => {
+      const res = results[idx];
+      if (res.status !== "fulfilled") return fallback;
+      return res.value?.data ?? fallback;
+    };
+
+    const failed = results
+      .map((res, idx) => ({ res, idx }))
+      .filter(({ res }) => res.status === "rejected")
+      .map(({ res, idx }) => {
+        const detail = normalizeDetail(res.reason?.response?.data?.detail || res.reason?.message || "");
+        return `${keys[idx]}: ${detail}`;
+      })
+      .filter((m) => !m.toLowerCase().includes("no records available yet"));
+
+    const s = dataFor(0, EMPTY_STATS);
+    const u = dataFor(1, {});
+    const p = dataFor(2, {});
+    const e = dataFor(3, {});
+    const r = dataFor(4, {});
+    const a = dataFor(5, {});
+    const d = dataFor(6, {});
+
+    setStats(s || EMPTY_STATS);
+    setUsers(u.users || []);
+    setPayments(p.payments || []);
+    setEmails(e.emails || []);
+    setRemovals(r.removals || []);
+    setAudit(a.audit || []);
+    setDocuments(d.documents || []);
+    setLoadError(failed.length ? failed[0] : "");
   };
   useEffect(() => { load(); }, []);
 
@@ -219,6 +263,12 @@ export default function Admin() {
 
   return (
     <DashboardLayout title="Admin Console">
+      {loadError && (
+        <div className="mb-4 font-mono text-xs text-[#FF3333]" data-testid="admin-load-error">
+          {'> '} {loadError}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
         <Stat label="Users" value={stats.users} testid="admin-stat-users" />
         <Stat label="Active Subs" value={stats.active_subs} testid="admin-stat-subs" />
@@ -239,6 +289,8 @@ export default function Admin() {
           ["users","Users"],
           ["documents","Documents"],
           ["brokers","Brokers"],
+          ["support","Support"],
+          ["workforce","Workforce Ops"],
           ["emails","Email Log"],
           ["audit","Audit Log"],
           ["settings","Settings"],
@@ -254,6 +306,8 @@ export default function Admin() {
       {tab === "operations" && <AdminOperations />}
       {tab === "health" && <AdminHealth />}
       {tab === "brokers" && <AdminBrokerContacts />}
+      {tab === "support" && <AdminSupportPanel />}
+      {tab === "workforce" && <AdminWorkforcePanel />}
       {tab === "settings" && <AdminSettings />}
 
       {tab === "payments" && (

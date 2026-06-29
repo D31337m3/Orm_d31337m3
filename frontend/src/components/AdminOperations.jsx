@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import adminApi from "@/lib/adminApi";
-import { Activity, Server, Users, CreditCard, Wrench, RefreshCcw } from "lucide-react";
+import { Activity, Server, Users, CreditCard, Wrench, RefreshCcw, RotateCcw, Power } from "lucide-react";
 
 const StatusPill = ({ status }) => {
   const normalized = String(status || "unknown").toLowerCase();
@@ -32,8 +32,11 @@ export default function AdminOperations() {
   const [telemetry, setTelemetry] = useState(null);
   const [users, setUsers] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [audit, setAudit] = useState([]);
   const [notice, setNotice] = useState("");
   const [creating, setCreating] = useState(false);
+  const [opsCapabilities, setOpsCapabilities] = useState({ host_controls_enabled: false, service_units: {} });
+  const [busyOp, setBusyOp] = useState("");
 
   const [newUser, setNewUser] = useState({
     email: "",
@@ -46,14 +49,18 @@ export default function AdminOperations() {
     setLoading(true);
     setNotice("");
     try {
-      const [t, u, p] = await Promise.all([
+      const [t, u, p, a] = await Promise.all([
         adminApi.telemetrySnapshot(),
         adminApi.listUsers(),
         adminApi.listPayments(),
+        adminApi.listAuditLog(),
       ]);
+      const caps = await adminApi.getOpsCapabilities();
       setTelemetry(t);
       setUsers(u || []);
       setPayments(p || []);
+      setAudit(a || []);
+      setOpsCapabilities(caps || { host_controls_enabled: false, service_units: {} });
     } catch (err) {
       setNotice(err?.response?.data?.detail || "Failed to load operations data");
     } finally {
@@ -71,6 +78,19 @@ export default function AdminOperations() {
     () => (payments || []).filter((p) => ["awaiting_confirmation", "pending_manual_review", "awaiting_tx_hash"].includes(p.status)),
     [payments]
   );
+
+  const operationsAudit = useMemo(() => {
+    const opsActions = new Set([
+      "restart_service",
+      "restart_all_services",
+      "reboot_server",
+      "service_status_update",
+      "service_heartbeat",
+    ]);
+    return (audit || [])
+      .filter((e) => opsActions.has(String(e.action || "")))
+      .slice(0, 100);
+  }, [audit]);
 
   const createUser = async () => {
     if (!newUser.email || !newUser.password) {
@@ -125,6 +145,67 @@ export default function AdminOperations() {
     await refresh();
   };
 
+  const restartService = async (serviceName) => {
+    if (!opsCapabilities?.host_controls_enabled) {
+      setNotice("Host controls are disabled. Set ADMIN_ENABLE_HOST_CONTROLS=true.");
+      return;
+    }
+    setBusyOp(`restart-${serviceName}`);
+    try {
+      const res = await adminApi.restartService(serviceName);
+      if (!res?.ok) {
+        setNotice(res?.result?.stderr || res?.message || `Failed to restart ${serviceName}`);
+        return;
+      }
+      setNotice(`Restarted ${serviceName} successfully.`);
+      await refresh();
+    } finally {
+      setBusyOp("");
+    }
+  };
+
+  const restartAll = async () => {
+    if (!opsCapabilities?.host_controls_enabled) {
+      setNotice("Host controls are disabled. Set ADMIN_ENABLE_HOST_CONTROLS=true.");
+      return;
+    }
+    if (!window.confirm("Restart ALL microservices now?")) return;
+    setBusyOp("restart-all");
+    try {
+      const res = await adminApi.restartAllServices();
+      if (!res?.ok) {
+        setNotice(res?.message || "Some services failed to restart.");
+      } else {
+        setNotice("Restarted all services.");
+      }
+      await refresh();
+    } finally {
+      setBusyOp("");
+    }
+  };
+
+  const rebootServer = async () => {
+    if (!opsCapabilities?.host_controls_enabled) {
+      setNotice("Host controls are disabled. Set ADMIN_ENABLE_HOST_CONTROLS=true.");
+      return;
+    }
+    const yes = window.confirm("Reboot the PHYSICAL SERVER now? This disconnects all active sessions.");
+    if (!yes) return;
+    const phrase = window.prompt('Type REBOOT to confirm physical server reboot', '');
+    if (phrase !== "REBOOT") return;
+    setBusyOp("reboot-server");
+    try {
+      const res = await adminApi.rebootServer();
+      if (!res?.ok) {
+        setNotice(res?.result?.stderr || res?.message || "Reboot command failed.");
+      } else {
+        setNotice("Reboot command sent.");
+      }
+    } finally {
+      setBusyOp("");
+    }
+  };
+
   if (loading) return <div className="font-mono text-zinc-500">loading operations<span className="blink">_</span></div>;
 
   return (
@@ -148,7 +229,9 @@ export default function AdminOperations() {
 
         <Card icon={Server} title="service control">
           <div className="font-mono text-xs text-zinc-400">Control plane actions from orchestrator APIs.</div>
-          <div className="font-mono text-[10px] text-zinc-500 mt-2">NOTE: host-level start/stop still lives in systemd runbooks.</div>
+          <div className="font-mono text-[10px] text-zinc-500 mt-2">
+            Host controls: {opsCapabilities?.host_controls_enabled ? "ENABLED" : "DISABLED (set ADMIN_ENABLE_HOST_CONTROLS=true)"}
+          </div>
         </Card>
 
         <Card icon={Users} title="user admin">
@@ -184,6 +267,13 @@ export default function AdminOperations() {
                       <button className="brutal-btn !py-1 !px-2 text-[10px]" onClick={() => triggerHeartbeat(s.service_name)}>heartbeat</button>
                       <button className="brutal-btn !py-1 !px-2 text-[10px]" onClick={() => setServiceStatus(s.service_name, "healthy")}>mark healthy</button>
                       <button className="brutal-btn !py-1 !px-2 text-[10px]" onClick={() => setServiceStatus(s.service_name, "stopping")}>mark stopping</button>
+                      <button
+                        className="brutal-btn !py-1 !px-2 text-[10px]"
+                        onClick={() => restartService(s.service_name)}
+                        disabled={busyOp === `restart-${s.service_name}`}
+                      >
+                        restart service
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -208,7 +298,20 @@ export default function AdminOperations() {
           <div className="font-mono text-xs text-zinc-400 mb-3">Use these checks before cutover and after deploy.</div>
           <div className="flex gap-2 flex-wrap">
             <button className="brutal-btn !py-2 !px-3 text-xs" onClick={refresh}>Run telemetry sweep</button>
-            <button className="brutal-btn !py-2 !px-3 text-xs" onClick={() => setNotice("Use host runbooks for service start/stop/restart via systemd")}>Show runbook hint</button>
+            <button
+              className="brutal-btn !py-2 !px-3 text-xs flex items-center gap-2"
+              onClick={restartAll}
+              disabled={busyOp === "restart-all" || !opsCapabilities?.host_controls_enabled}
+            >
+              <RotateCcw size={12} /> Restart All Services
+            </button>
+            <button
+              className="brutal-btn !py-2 !px-3 text-xs flex items-center gap-2 !border-[#FF3333] !text-[#FF3333]"
+              onClick={rebootServer}
+              disabled={busyOp === "reboot-server" || !opsCapabilities?.host_controls_enabled}
+            >
+              <Power size={12} /> Reboot Physical Server
+            </button>
           </div>
         </Card>
       </div>
@@ -227,6 +330,41 @@ export default function AdminOperations() {
               </div>
             </div>
           ))}
+        </div>
+      </Card>
+
+      <Card icon={Wrench} title="operations audit">
+        <div className="font-mono text-xs text-zinc-500 mb-3">Recent restart/reboot/service-control events (latest 100).</div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-[#222]">
+                <th className="text-left overline py-2">time</th>
+                <th className="text-left overline py-2">actor</th>
+                <th className="text-left overline py-2">action</th>
+                <th className="text-left overline py-2">target</th>
+                <th className="text-left overline py-2">result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {operationsAudit.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-4 font-mono text-xs text-zinc-500">No operations audit entries yet.</td>
+                </tr>
+              )}
+              {operationsAudit.map((e) => (
+                <tr key={e.id || `${e.at}-${e.action}`} className="border-b border-[#222]">
+                  <td className="py-2 font-mono text-xs text-zinc-400">{String(e.at || "").slice(0, 19)}</td>
+                  <td className="py-2 font-mono text-xs">{e.actor_email || "unknown"}</td>
+                  <td className="py-2 font-mono text-xs text-zinc-300">{e.action || "—"}</td>
+                  <td className="py-2 font-mono text-xs text-zinc-400">{e.target_service || e.unit || "—"}</td>
+                  <td className="py-2">
+                    <StatusPill status={e.ok === true ? "ok" : e.ok === false ? "fail" : "unknown"} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Card>
     </div>

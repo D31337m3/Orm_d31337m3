@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PID_DIR="${ROOT_DIR}/pids"
-SERVICES=(orchestrator watchdog payments data_handling client_index auditor)
+SERVICES=(orchestrator watchdog workforce_ops support_hub payments data_handling client_index auditor)
 
 for svc in "${SERVICES[@]}"; do
   pid_file="${PID_DIR}/${svc}.pid"
