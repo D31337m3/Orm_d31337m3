@@ -1,26 +1,28 @@
-# D31337m3 Android Staff App
+# D31337m3 Android Customer Dashboard
 
-This folder is a starter Android project scaffold for the internal staff/admin mobile app.
+This folder is a starter Android project scaffold for the customer-facing mobile app.
 
 ## Included
 - Kotlin + Jetpack Compose starter structure
 - App shell entry point
-- Basic launch screen scaffold
+- Customer/staff dashboard shells
 - Compose theme files
 - Gradle build files for Android Studio
+- Gradle wrapper (`./gradlew`)
 
 ## Planned modules
-- `feature-ops` for service control and host actions
+- `feature-dashboard` for reputation, scan status, and account summary
+- `feature-findings` for broker alerts and removal tracking
 - `feature-support` for chat and tickets
-- `feature-workforce` for shifts, payroll, and approvals
+- `feature-billing` for plan, invoices, and renewals
 - `core-network` for authenticated API calls
 - `core-auth` for token/session storage
 
 ## Next steps
 1. Open this folder in Android Studio.
 2. Sync Gradle.
-3. Add the Gradle wrapper if you want this to build standalone from the command line.
-4. Connect the app to the orchestrator API.
+3. Run `./gradlew build` on a machine with Java and the Android SDK.
+4. Connect the app to the customer-facing orchestrator API.
 
 ## Notes
 - This scaffold is intentionally small and easy to extend.
