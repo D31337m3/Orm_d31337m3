@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import PageBrandBanner from "@/components/PageBrandBanner";
 import AdminTable from "@/components/AdminTable";
 import Drawer, { Field } from "@/components/Drawer";
 import api from "@/lib/api";
@@ -306,8 +307,9 @@ export default function Admin() {
 
   return (
     <DashboardLayout title="Admin Console">
+      <PageBrandBanner title="admin" description="Brand-matched control plane for operations, support, and audit work." />
       {loadError && (
-        <div className="mb-4 font-mono text-xs text-[#FF3333]" data-testid="admin-load-error">
+        <div className="mb-4 font-mono text-xs text-[#A855F7]" data-testid="admin-load-error">
           {'> '} {loadError}
         </div>
       )}

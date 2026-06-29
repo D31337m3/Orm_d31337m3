@@ -11,8 +11,10 @@
   --border: #222222;
   --text: #FFFFFF;
   --muted: #A1A1AA;
-  --primary: #FF3333;
-  --primary-hover: #CC0000;
+  --primary: #8B5CF6;
+  --primary-hover: #7C3AED;
+  --brand-glow: rgba(139, 92, 246, 0.24);
+  --brand-soft: rgba(139, 92, 246, 0.12);
   --warning: #FFD700;
   --success: #00FF41;
 }
@@ -105,6 +107,14 @@ html, body, #root {
 
 .hero-grain {
   background-image:
-    radial-gradient(circle at 30% 20%, rgba(255,51,51,0.08), transparent 40%),
+    radial-gradient(circle at 30% 20%, rgba(139,92,246,0.16), transparent 40%),
+    radial-gradient(circle at 70% 15%, rgba(255,255,255,0.06), transparent 30%),
     radial-gradient(circle at 80% 60%, rgba(255,255,255,0.04), transparent 50%);
+}
+
+.brand-panel {
+  background:
+    radial-gradient(circle at 20% 20%, var(--brand-soft), transparent 38%),
+    linear-gradient(180deg, rgba(255,255,255,0.03), transparent 24%),
+    var(--surface);
 }

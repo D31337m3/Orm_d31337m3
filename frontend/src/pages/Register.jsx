@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import SupportChatWidget from "@/components/SupportChatWidget";
-import { Terminal } from "lucide-react";
+import BrandMark from "@/components/BrandMark";
 
 export default function Register() {
   const { register, verifyRegistrationOtp, resendRegistrationOtp } = useAuth();
@@ -61,8 +61,7 @@ export default function Register() {
     <div className="min-h-screen bg-[#050505] flex items-center justify-center px-4">
       <div className="w-full max-w-md brutal-card p-10">
         <Link to="/" className="flex items-center gap-2 mb-8" data-testid="auth-logo">
-          <Terminal className="text-[#FF3333]" size={20} />
-          <span className="font-display font-black text-xl">d31337m3</span>
+          <BrandMark size={34} showWordmark />
         </Link>
         <div className="overline mb-2">// new operator</div>
         <h1 className="font-display font-black text-3xl mb-8">{challenge ? "Verify email." : "Create account."}</h1>

@@ -24,7 +24,7 @@ sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
 from shared.jwt_utils import create_service_token, verify_service_token, create_user_token, verify_user_token
 from shared.security_middleware import verify_service_request, verify_user_request, require_service_auth, require_user_auth
 from shared.database_models import *
-from shared.utils import now_iso, hash_password, verify_password, SUPPORTED_COUNTRIES, DATA_BROKERS, PLANS
+from shared.utils import now_iso, hash_password, verify_password, SUPPORTED_COUNTRIES, DATA_BROKERS, BROKER_DIRECTORY, PLANS
 from shared.secrets_manager import get_secret
 
 # Import local models (would be defined in a models.py file)
@@ -366,12 +366,14 @@ async def real_scrape_for_keyword(keyword_value: str, kw_type: str) -> list[dict
 
     q = quote_plus(keyword_value)
     probe_urls = [
-        ("Spokeo", f"https://www.spokeo.com/search?q={q}"),
-        ("WhitePages", f"https://www.whitepages.com/name/{keyword_value.replace(' ', '-')}"),
-        ("FastPeopleSearch", f"https://www.fastpeoplesearch.com/name/{keyword_value.replace(' ', '-')}"),
+        (entry["name"], entry["opt_out_url"].format(first_name=keyword_value.split()[0].lower(), last_name=keyword_value.split()[-1].lower()) if entry.get("opt_out_url") and "{" in entry["opt_out_url"] else entry.get("opt_out_url"))
+        for entry in BROKER_DIRECTORY
+        if entry.get("opt_out_url")
+    ]
+    probe_urls.extend([
         ("Bing", f"https://www.bing.com/search?q=%22{q}%22"),
         ("Google", f"https://www.google.com/search?q=%22{q}%22"),
-    ]
+    ])
     findings: list[dict] = []
     headers = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",

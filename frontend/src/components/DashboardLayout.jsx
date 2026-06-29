@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
+import BrandMark from "@/components/BrandMark";
 import CanadaFlag from "@/components/CanadaFlag";
 import SupportChatWidget from "@/components/SupportChatWidget";
 import { LayoutDashboard, KeyRound, Search, CreditCard, ShieldAlert, LogOut, Terminal, FileText, Shield } from "lucide-react";
@@ -30,8 +31,7 @@ export default function DashboardLayout({ children, title }) {
       {/* Sidebar */}
       <aside className="w-64 border-r border-[#222] bg-black flex flex-col" data-testid="sidebar">
         <Link to="/" className="px-6 py-6 border-b border-[#222] flex items-center gap-2">
-          <Terminal className="text-[#FF3333]" size={20} />
-          <span className="font-display font-black text-xl tracking-tighter">d31337m3</span>
+          <BrandMark size={34} showWordmark />
         </Link>
         <nav className="flex-1 py-4">
           <NavLink to="/dashboard" icon={LayoutDashboard} label="Overview" testid="nav-dashboard" />
@@ -56,9 +56,9 @@ export default function DashboardLayout({ children, title }) {
 
       {/* Main */}
       <main className="flex-1 flex flex-col">
-        <header className="border-b border-[#222] px-8 py-5 flex items-center justify-between">
+        <header className="border-b border-[#222] px-8 py-5 flex items-center justify-between bg-[#08060f]">
           <div>
-            <div className="overline mb-1">d31337m3 // control</div>
+            <div className="overline mb-1 text-[#A855F7]">d31337m3 // control</div>
             <h1 className="font-display font-bold text-2xl tracking-tight" data-testid="page-title">{title}</h1>
           </div>
           <div className="font-mono text-xs text-zinc-500 flex items-center gap-3">

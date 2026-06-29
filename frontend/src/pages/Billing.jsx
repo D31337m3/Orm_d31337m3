@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import PageBrandBanner from "@/components/PageBrandBanner";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Copy, CheckCircle2 } from "lucide-react";
@@ -46,10 +47,11 @@ export default function Billing() {
 
   return (
     <DashboardLayout title="Billing & Subscription">
+      <PageBrandBanner title="billing" description="Purple-branded checkout for subscriptions and payment history." />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {plans.map(p => (
           <div key={p.id} data-testid={`billing-plan-${p.id}`}
-               className={`brutal-card p-6 cursor-pointer ${selPlan === p.id ? "border-[#FF3333]" : ""}`}
+               className={`brutal-card p-6 cursor-pointer ${selPlan === p.id ? "border-[#A855F7]" : ""}`}
                onClick={()=>setSelPlan(p.id)}>
             <div className="overline mb-2">// {p.id}</div>
             <div className="font-display font-black text-2xl mb-1">{p.name}</div>
@@ -78,7 +80,7 @@ export default function Billing() {
                 ["paypal","PayPal"],
               ].map(([k,l]) => (
                 <button key={k} type="button" onClick={()=>setMethod(k)} data-testid={`method-${k}`}
-                  className={`border p-4 text-left ${method===k ? "border-[#FF3333] bg-[#1a0808]" : "border-[#222] hover:border-white"}`}>
+                  className={`border p-4 text-left ${method===k ? "border-[#A855F7] bg-[#120f1f]" : "border-[#222] hover:border-white"}`}>
                   <div className="font-display font-bold">{l}</div>
                   <div className="font-mono text-xs text-zinc-500 mt-1">{k === "crypto" ? "ETH / Polygon / Base" : k === "interac" ? "Canadian Email Transfer" : "Card or PayPal balance"}</div>
                 </button>
@@ -93,7 +95,7 @@ export default function Billing() {
                 <div className="grid grid-cols-3 gap-3">
                   {["base","polygon","ethereum"].map(n => (
                     <button key={n} type="button" onClick={()=>setNetwork(n)} data-testid={`network-${n}`}
-                      className={`border p-3 font-mono text-sm uppercase ${network===n ? "border-[#FF3333] text-white" : "border-[#222] text-zinc-500 hover:text-white"}`}>
+                      className={`border p-3 font-mono text-sm uppercase ${network===n ? "border-[#A855F7] text-white" : "border-[#222] text-zinc-500 hover:text-white"}`}>
                       {n}
                     </button>
                   ))}

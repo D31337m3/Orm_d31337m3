@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import BrandMark from "@/components/BrandMark";
 import api from "@/lib/api";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
@@ -30,7 +31,6 @@ const ScoreGauge = ({ score }) => {
       </div>
       <div className="mt-3 font-mono text-xs text-zinc-500">{score >= 70 ? "EXPOSURE: LOW" : score >= 40 ? "EXPOSURE: MODERATE" : "EXPOSURE: CRITICAL"}</div>
 
-      {/* glowing ring */}
       <motion.div
         animate={{ opacity: [0.05, 0.15, 0.05] }} transition={{ duration: 3, repeat: Infinity }}
         className="absolute -bottom-20 -right-20 w-48 h-48 rounded-full pointer-events-none"
@@ -61,16 +61,23 @@ export default function Dashboard() {
     setScore(r1.data);
     setFindings(r2.data.findings);
   };
-  useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    load();
+  }, []);
 
   const runScan = async () => {
-    setScanning(true); setMsg("");
+    setScanning(true);
+    setMsg("");
     try {
       const r = await api.post("/scan/run", {});
       setMsg(r.data.message);
       setTimeout(load, 3000);
-    } catch (e) { setMsg(e.response?.data?.detail || "Scan failed"); }
-    finally { setScanning(false); }
+    } catch (e) {
+      setMsg(e.response?.data?.detail || "Scan failed");
+    } finally {
+      setScanning(false);
+    }
   };
 
   if (!score) return <DashboardLayout title="Overview"><div className="font-mono">loading<span className="blink">_</span></div></DashboardLayout>;
@@ -78,33 +85,48 @@ export default function Dashboard() {
   const subActive = user?.subscription_status === "active";
   const recent = findings.slice(0, 6);
 
-  // Trend chart: findings discovered per day for last 14 days
   const trend = (() => {
     const map = new Map();
     for (let i = 13; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i);
+      const d = new Date();
+      d.setDate(d.getDate() - i);
       map.set(d.toISOString().slice(0, 10), 0);
     }
-    findings.forEach(f => {
+    findings.forEach((f) => {
       const k = (f.discovered_at || "").slice(0, 10);
       if (map.has(k)) map.set(k, map.get(k) + 1);
     });
     return Array.from(map.entries()).map(([d, c]) => ({ d: d.slice(5), c }));
   })();
 
-  // Severity distribution
-  const sevDist = ["critical","high","medium","low"].map(s => ({
+  const sevDist = ["critical", "high", "medium", "low"].map((s) => ({
     name: s.toUpperCase(),
-    value: findings.filter(f => f.severity === s && f.status === "active").length,
+    value: findings.filter((f) => f.severity === s && f.status === "active").length,
     color: SEV_COLOR[s],
   }));
 
-  // Broker breakdown (top 6)
-  const brokerCount = findings.reduce((acc, f) => { acc[f.broker] = (acc[f.broker]||0)+1; return acc; }, {});
-  const topBrokers = Object.entries(brokerCount).sort((a,b)=>b[1]-a[1]).slice(0, 6).map(([n,c]) => ({ name: n, c }));
+  const brokerCount = findings.reduce((acc, f) => {
+    acc[f.broker] = (acc[f.broker] || 0) + 1;
+    return acc;
+  }, {});
+  const topBrokers = Object.entries(brokerCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([name, c]) => ({ name, c }));
 
   return (
     <DashboardLayout title={`Welcome back, ${user?.name || user?.email}`}>
+      <div className="mb-6 flex items-center justify-between brutal-card p-4 brand-panel">
+        <div className="flex items-center gap-3">
+          <BrandMark size={30} showWordmark />
+          <div className="font-mono text-xs text-zinc-400">
+            <div className="uppercase tracking-[0.35em]">production branding</div>
+            <div className="text-zinc-500">Purple mark, dark shell, public-safe operational UI.</div>
+          </div>
+        </div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-[#C4B5FD]">live</div>
+      </div>
+
       {!subActive && (
         <motion.div
           initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
@@ -136,7 +158,7 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
           className="brutal-card p-6 flex flex-col justify-between">
           <div>
-            <div className="overline mb-2">// run new scan</div>
+            <div className="overline mb-2 text-[#A855F7]">// run new scan</div>
             <div className="font-mono text-xs text-zinc-500">Trigger immediate crawl across all brokers + Google &amp; Bing.</div>
           </div>
           <button data-testid="run-scan-btn" disabled={scanning} onClick={runScan} className="brutal-btn brutal-btn-primary mt-4 flex items-center gap-2 justify-center">
@@ -146,7 +168,6 @@ export default function Dashboard() {
         </motion.div>
       </div>
 
-      {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}
@@ -181,7 +202,6 @@ export default function Dashboard() {
         </motion.div>
       </div>
 
-      {/* Top brokers + Legal CTA */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }}
           className="brutal-card p-6 lg:col-span-2" data-testid="top-brokers">
@@ -194,7 +214,7 @@ export default function Dashboard() {
                 <div key={name} className="flex items-center gap-4">
                   <div className="font-mono text-xs w-44 truncate">{name}</div>
                   <div className="flex-1 h-3 bg-[#0a0a0a] border border-[#222]">
-                    <motion.div initial={{ width: 0 }} animate={{ width: `${(c / Math.max(...topBrokers.map(b=>b.c))) * 100}%` }} transition={{ duration: 0.7 }}
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${(c / Math.max(...topBrokers.map((b) => b.c))) * 100}%` }} transition={{ duration: 0.7 }}
                       className="h-full bg-[#FF3333]" />
                   </div>
                   <div className="font-mono text-xs text-zinc-400 w-8 text-right">{c}</div>
@@ -218,7 +238,6 @@ export default function Dashboard() {
         </motion.div>
       </div>
 
-      {/* Recent findings */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.55 }}
         className="brutal-card p-6">
         <div className="overline mb-3">// recent findings</div>
@@ -227,16 +246,16 @@ export default function Dashboard() {
         ) : (
           <table className="w-full" data-testid="recent-findings-table">
             <thead><tr className="border-b border-[#222]">
-              {["Broker","Keyword","Data","Severity","Date"].map(h=><th key={h} className="overline text-left py-2">{h}</th>)}
+              {["Broker", "Keyword", "Data", "Severity", "Date"].map((h) => <th key={h} className="overline text-left py-2">{h}</th>)}
             </tr></thead>
             <tbody>
-              {recent.map(f => (
+              {recent.map((f) => (
                 <tr key={f.id} className="border-b border-[#222] hover:bg-[#0a0a0a]">
                   <td className="py-3 font-mono text-sm">{f.broker}</td>
                   <td className="py-3 font-mono text-sm text-zinc-400">{f.keyword_value}</td>
                   <td className="py-3 font-mono text-xs text-zinc-500">{(f.data_found || []).join(", ")}</td>
                   <td className={`py-3 font-mono text-sm severity-${f.severity}`}>{(f.severity || "").toUpperCase()}</td>
-                  <td className="py-3 font-mono text-xs text-zinc-500">{f.discovered_at?.slice(0,10)}</td>
+                  <td className="py-3 font-mono text-xs text-zinc-500">{f.discovered_at?.slice(0, 10)}</td>
                 </tr>
               ))}
             </tbody>

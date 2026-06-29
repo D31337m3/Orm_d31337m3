@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import PageBrandBanner from "@/components/PageBrandBanner";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -94,6 +95,7 @@ export default function Security() {
 
   return (
     <DashboardLayout title="Security Settings">
+      <PageBrandBanner title="security" description="2FA, trusted devices, and account hardening in the new brand shell." />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="brutal-card p-6" data-testid="security-twofa-panel">
           <div className="overline mb-2">// account security</div>
@@ -168,7 +170,7 @@ export default function Security() {
           )}
 
           {message && <div className="mt-3 font-mono text-xs text-[#00FF41]">› {message}</div>}
-          {error && <div className="mt-3 font-mono text-xs text-[#FF3333]">› {error}</div>}
+          {error && <div className="mt-3 font-mono text-xs text-[#A855F7]">› {error}</div>}
         </div>
 
         <div className="brutal-card p-6" data-testid="security-devices-panel">

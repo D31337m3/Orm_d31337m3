@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import PageBrandBanner from "@/components/PageBrandBanner";
 import api from "@/lib/api";
 import { Plus, Trash2, Play } from "lucide-react";
 
@@ -39,8 +40,9 @@ export default function Keywords() {
 
   return (
     <DashboardLayout title="Monitored Keywords">
+      <PageBrandBanner title="keywords" description="Shared brand header for monitoring and scan controls." />
       <div className="brutal-card p-6 mb-6">
-        <div className="overline mb-3">// add keyword</div>
+        <div className="overline mb-3 text-[#A855F7]">// add keyword</div>
         <form onSubmit={add} className="flex flex-col md:flex-row gap-3" data-testid="add-keyword-form">
           <input data-testid="keyword-value" value={value} onChange={(e)=>setValue(e.target.value)} placeholder="e.g. John Doe / john@example.com / 555-1234" className="brutal-input flex-1" required />
           <select data-testid="keyword-type" value={type} onChange={(e)=>setType(e.target.value)} className="brutal-input md:w-48">

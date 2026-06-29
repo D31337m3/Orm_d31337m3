@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import PageBrandBanner from "@/components/PageBrandBanner";
 import api from "@/lib/api";
 import { useNavigate } from "react-router-dom";
 import { FileSignature } from "lucide-react";
@@ -40,12 +41,13 @@ export default function Findings() {
 
   return (
     <DashboardLayout title="Data Broker Findings">
+      <PageBrandBanner title="findings" description="Brand-matched view for exposures, removals, and legal actions." />
       <div className="flex gap-2 mb-6 flex-wrap" data-testid="findings-filters">
         {[
           ["all","All"],["active","Active"],["pending_removal","Pending"],["removed","Removed"]
         ].map(([k,l]) => (
           <button key={k} onClick={()=>setFilter(k)} data-testid={`filter-${k}`}
-            className={`font-mono text-xs px-4 py-2 border ${filter===k ? "border-white text-white" : "border-[#222] text-zinc-500 hover:text-white"}`}>
+            className={`font-mono text-xs px-4 py-2 border ${filter===k ? "border-[#A855F7] text-white" : "border-[#222] text-zinc-500 hover:text-white"}`}>
             {l.toUpperCase()}
           </button>
         ))}
@@ -63,7 +65,7 @@ export default function Findings() {
               {filtered.map(f => (
                 <tr key={f.id} className="border-b border-[#222] hover:bg-[#0a0a0a]" data-testid={`finding-row-${f.id}`}>
                   <td className="py-3 font-mono text-sm">
-                    <a href={f.url} target="_blank" rel="noopener noreferrer" className="hover:text-[#FF3333]">{f.broker}</a>
+                    <a href={f.url} target="_blank" rel="noopener noreferrer" className="hover:text-[#A855F7]">{f.broker}</a>
                   </td>
                   <td className="py-3 font-mono text-xs text-zinc-400">{f.keyword_value}</td>
                   <td className="py-3 font-mono text-xs text-zinc-500">{(f.data_found || []).join(", ")}</td>
@@ -73,7 +75,7 @@ export default function Findings() {
                   <td className="py-3 flex gap-3">
                     {f.status === "active" && (
                       <>
-                        <button onClick={()=>requestRemoval(f.id)} data-testid={`request-removal-${f.id}`} className="font-mono text-xs text-[#FF3333] hover:text-white">REMOVAL</button>
+                        <button onClick={()=>requestRemoval(f.id)} data-testid={`request-removal-${f.id}`} className="font-mono text-xs text-[#A855F7] hover:text-white">REMOVAL</button>
                         <button onClick={()=>generateLegal(f)} data-testid={`legal-${f.id}`} className="font-mono text-xs text-[#FFD700] hover:text-white flex items-center gap-1"><FileSignature size={12}/>LEGAL</button>
                       </>
                     )}

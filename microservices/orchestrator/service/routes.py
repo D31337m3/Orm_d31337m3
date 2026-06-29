@@ -30,7 +30,7 @@ sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
 from shared.jwt_utils import create_service_token, verify_service_token, verify_user_token, create_user_token
 from shared.security_middleware import verify_service_request, require_service_auth, verify_user_request
 from shared.database_models import generate_id, now_iso
-from shared.utils import SUPPORTED_COUNTRIES, DATA_BROKERS, PLANS, RATE_LIMITS, RATE_WINDOW_SEC, RATE_MAX_ATTEMPTS
+from shared.utils import SUPPORTED_COUNTRIES, DATA_BROKERS, BROKER_DIRECTORY, PLANS, RATE_LIMITS, RATE_WINDOW_SEC, RATE_MAX_ATTEMPTS
 from shared.secrets_manager import get_secret
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -66,6 +66,19 @@ SUPPORT_ANON_SESSIONS: Dict[str, Dict[str, Any]] = {}
 WORKFORCE_SHIFTS: Dict[str, Dict[str, Any]] = {}
 WORKFORCE_TIMESHEETS: Dict[str, Dict[str, Any]] = {}
 WORKFORCE_PAYROLL_RUNS: Dict[str, Dict[str, Any]] = {}
+
+for _broker in BROKER_DIRECTORY:
+    BROKER_CONTACTS[_broker["name"]] = {
+        "id": generate_id(),
+        "broker": _broker["name"],
+        "email": _broker.get("privacy_email"),
+        "phone": _broker.get("privacy_phone"),
+        "address": _broker.get("address"),
+        "form": _broker.get("opt_out_url"),
+        "region": _broker.get("region"),
+        "updated_at": now_iso(),
+        "updated_by": "seed",
+    }
 
 _support_db_lock = threading.Lock()
 

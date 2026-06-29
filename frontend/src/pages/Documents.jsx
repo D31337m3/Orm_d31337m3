@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import PageBrandBanner from "@/components/PageBrandBanner";
 import SignaturePad from "@/components/SignaturePad";
 import api from "@/lib/api";
 import { motion } from "framer-motion";
@@ -127,9 +128,10 @@ export default function Documents() {
 
   return (
     <DashboardLayout title="Legal Documents — North America 🇨🇦 🇺🇸 🇲🇽">
-      <div className="brutal-card p-4 mb-6 border-[#FF3333]/40 bg-[#1a0808]/30">
+      <PageBrandBanner title="documents" description="Purple-branded legal workflow for notices, signatures, and exports." />
+      <div className="brutal-card p-4 mb-6 border-[#A855F7]/40 bg-[#120f1f]/30">
         <div className="font-mono text-xs text-zinc-300">
-          <span className="text-[#FF3333] font-bold">// JURISDICTION:</span> Legal document services are available exclusively for residents of
+          <span className="text-[#A855F7] font-bold">// JURISDICTION:</span> Legal document services are available exclusively for residents of
           <span className="text-white"> Canada (PIPEDA/Quebec Law 25)</span>,
           <span className="text-white"> United States (CCPA/CPRA/DMCA)</span>, and
           <span className="text-white"> México (LFPDPPP)</span>.
@@ -149,7 +151,7 @@ export default function Documents() {
       {tab === "documents" && (
         <div className="brutal-card p-6" data-testid="documents-panel">
           {documents.length === 0 ? (
-            <div className="font-mono text-zinc-500 py-6">No documents yet. Go to <button onClick={()=>setTab("generate")} className="text-[#FF3333]">Generate New →</button> to create your first legal notice.</div>
+            <div className="font-mono text-zinc-500 py-6">No documents yet. Go to <button onClick={()=>setTab("generate")} className="text-[#A855F7]">Generate New →</button> to create your first legal notice.</div>
           ) : (
             <table className="w-full">
               <thead><tr className="border-b border-[#222]">
@@ -196,6 +198,7 @@ export default function Documents() {
                   disabled={!t.available}
                   data-testid={`template-${t.id}`}
                   className={`w-full text-left border p-4 transition-all ${genForm.template_id===t.id ? "border-[#FF3333] bg-[#1a0808]" : t.available ? "border-[#222] hover:border-white" : "border-[#222] opacity-40 cursor-not-allowed"}`}
+                                  className={`w-full text-left border p-4 transition-all ${genForm.template_id===t.id ? "border-[#A855F7] bg-[#120f1f]" : t.available ? "border-[#222] hover:border-white" : "border-[#222] opacity-40 cursor-not-allowed"}`}
                 >
                   <div className="font-display font-bold text-lg flex items-center gap-2">
                     <span className="text-2xl">{TEMPLATE_ICONS[t.id]}</span>{t.title}
@@ -204,6 +207,7 @@ export default function Documents() {
                   <div className="font-mono text-[10px] tracking-widest text-zinc-500 mt-2">
                     JURISDICTIONS: {t.jurisdictions.join(" · ")}
                     {!t.available && <span className="text-[#FF3333]"> · NOT AVAILABLE FOR YOUR COUNTRY</span>}
+                                      {!t.available && <span className="text-[#A855F7]"> · NOT AVAILABLE FOR YOUR COUNTRY</span>}
                   </div>
                 </motion.button>
               ))}
