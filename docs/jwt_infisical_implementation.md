@@ -42,8 +42,8 @@ Services:
 
 ### 5. Documentation ✓
 - **Infisical Setup Guide** - Complete instructions for configuring Infisical
-- **JWT Integration Verification Script** - Test JWT functionality
-- Location: `docs/infisical_setup.md` and `microservices/verify_jwt_integration.sh`
+- **Operational Health Validation** - Verify service readiness and endpoint health
+- Location: `docs/infisical_setup.md` and `microservices/health_check.sh`
 
 ## Architecture
 
@@ -164,9 +164,9 @@ For detailed instructions, see `docs/infisical_setup.md`
 
 ### Testing
 ```bash
-# Verify JWT integration
+# Verify service health and readiness
 cd /home/D31337m3/Orm_d31337m3/microservices
-./verify_jwt_integration.sh
+./health_check.sh
 
 # Test user creation and login
 curl -s -X POST https://d31337m3.com/api/auth/register \
@@ -224,7 +224,7 @@ This allows development and testing without Infisical setup.
 | Database Layer | `microservices/shared/database.py` |
 | Database Models | `microservices/shared/database_models.py` |
 | Infisical Setup Docs | `docs/infisical_setup.md` |
-| Verification Script | `microservices/verify_jwt_integration.sh` |
+| Health Verification Script | `microservices/health_check.sh` |
 | Service Start Scripts | `microservices/*/start.sh` |
 | Systemd Services | `microservices/systemd/*.service` |
 

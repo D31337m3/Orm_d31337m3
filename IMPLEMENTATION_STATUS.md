@@ -140,7 +140,7 @@ Plus Infisical credentials via:
 | `microservices/systemd/*.service` | Added DATABASE_URL + Infisical env | ✅ Updated (all 6) |
 | `docs/infisical_setup.md` | Complete setup guide | ✅ Created |
 | `docs/jwt_infisical_implementation.md` | Implementation summary | ✅ Created |
-| `microservices/verify_jwt_integration.sh` | Verification script | ✅ Created |
+| `microservices/health_check.sh` | Operational health verification script | ✅ In Use |
 
 ---
 
@@ -224,11 +224,11 @@ Plus Infisical credentials via:
 
 ## Development & Testing
 
-### Run Integration Tests
+### Run Operational Health Checks
 ```bash
-# Test JWT and database functionality
+# Validate running microservices and endpoint availability
 cd /home/D31337m3/Orm_d31337m3/microservices
-./verify_jwt_integration.sh
+./health_check.sh
 ```
 
 ### Test User Registration

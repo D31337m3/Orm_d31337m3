@@ -5,6 +5,7 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { Terminal, Shield, Database, Bell, Activity, Lock, Search, FileSignature, Gavel, Globe } from "lucide-react";
 import FeatureDialog from "@/components/FeatureDialog";
 import CanadaFlag from "@/components/CanadaFlag";
+import BrokerSubmissionDialog from "@/components/BrokerSubmissionDialog";
 
 const BROKERS = ["SPOKEO","WHITEPAGES","ACXIOM","BEENVERIFIED","INTELIUS","MYLIFE","RADARIS","PEOPLEFINDER","TRUTHFINDER","INSTANTCHECKMATE","EQUIFAX","PEEKYOU","USSEARCH","FASTPEOPLESEARCH","GOOGLE","BING"];
 
@@ -409,9 +410,23 @@ export default function Landing() {
                 <>
                   <Link to="/register" data-testid="hero-cta-primary" className="brutal-btn brutal-btn-primary">Start Free Trial →</Link>
                   <a href="#features" data-testid="hero-cta-secondary" className="brutal-btn">View Capabilities</a>
+                  <BrokerSubmissionDialog
+                    triggerLabel="Submit Broker"
+                    triggerClassName="brutal-btn"
+                    source="landing"
+                    authenticated={false}
+                  />
                 </>
               ) : (
-                <a href="#waitlist" data-testid="hero-cta-primary" className="brutal-btn brutal-btn-primary">Join Waitlist →</a>
+                <>
+                  <a href="#waitlist" data-testid="hero-cta-primary" className="brutal-btn brutal-btn-primary">Join Waitlist →</a>
+                  <BrokerSubmissionDialog
+                    triggerLabel="Submit Broker"
+                    triggerClassName="brutal-btn"
+                    source="landing"
+                    authenticated={false}
+                  />
+                </>
               )}
             </motion.div>
             <motion.div
@@ -557,31 +572,22 @@ export default function Landing() {
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}
                 className="font-display font-black text-5xl text-[#00FF41]">87<span className="text-base text-zinc-500">/100</span></motion.div>
             </div>
-          </motion.div>
 
-          {/* Public-safe service health */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.55, duration: 0.5 }}
-            className="border border-[#222] p-6 bg-[#080808] font-mono text-xs relative"
-            data-testid="public-service-health"
-          >
-            <div className="overline mb-3 flex items-center justify-between">
-              <span>service.health (public)</span>
-              <span className="flex items-center gap-1.5 text-[#00FF41]"><span className="w-2 h-2 bg-[#00FF41] rounded-full blink"/>LIVE</span>
-            </div>
-            <div className="space-y-2">
+            <div className="mt-6 pt-4 border-t border-[#222]" data-testid="public-service-health">
+              <div className="overline mb-2 flex items-center justify-between">
+                <span>service.health (public)</span>
+                <span className="flex items-center gap-1.5 text-[#00FF41]"><span className="w-2 h-2 bg-[#00FF41] rounded-full blink"/>LIVE</span>
+              </div>
+              <div className="space-y-1">
               {serviceHealth.map((svc) => (
-                <div key={svc.key} className="flex items-center justify-between border-b border-[#1b1b1b] pb-2">
-                  <span className="text-zinc-300">{svc.label}</span>
-                  <span className="flex items-center gap-3">
-                    <span className="text-zinc-500">{svc.latencyMs}ms</span>
-                    <span className="text-[10px] px-2 py-0.5 border border-[#00FF41] text-[#00FF41] uppercase tracking-widest">{svc.status}</span>
-                  </span>
+                <div key={svc.key} className="text-zinc-400">
+                  › <span className="text-white">{svc.label}</span> · <span className="text-zinc-500">{svc.latencyMs}ms</span> · <span className="text-[#00FF41] uppercase">{svc.status}</span>
                 </div>
               ))}
+              </div>
+              <div className="mt-3 text-zinc-500">Last checked: {new Date(healthLastChecked).toLocaleTimeString()}</div>
+              <div className="mt-2 text-zinc-600">Public-safe status only. Detailed security diagnostics are intentionally redacted.</div>
             </div>
-            <div className="mt-3 text-zinc-500">Last checked: {new Date(healthLastChecked).toLocaleTimeString()}</div>
-            <div className="mt-2 text-zinc-600">Public-safe status only. Detailed security diagnostics are intentionally redacted.</div>
           </motion.div>
         </div>
       </motion.section>

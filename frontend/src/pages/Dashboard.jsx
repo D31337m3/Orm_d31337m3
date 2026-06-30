@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { motion } from "framer-motion";
 import { Play, AlertTriangle, FileSignature, Sparkles } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, BarChart, Bar, XAxis, Tooltip, Cell } from "recharts";
+import BrokerSubmissionDialog from "@/components/BrokerSubmissionDialog";
 
 const SEV_COLOR = { low: "#71717a", medium: "#FFD700", high: "#fb923c", critical: "#FF3333" };
 
@@ -124,7 +125,15 @@ export default function Dashboard() {
             <div className="text-zinc-500">Purple mark, dark shell, public-safe operational UI.</div>
           </div>
         </div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-[#C4B5FD]">live</div>
+        <div className="flex items-center gap-3">
+          <BrokerSubmissionDialog
+            triggerLabel="Submit Broker"
+            triggerClassName="brutal-btn !py-2 !px-3 text-[11px]"
+            source="dashboard"
+            authenticated
+          />
+          <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-[#C4B5FD]">live</div>
+        </div>
       </div>
 
       {!subActive && (
