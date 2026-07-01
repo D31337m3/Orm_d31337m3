@@ -6,7 +6,7 @@ Handles service-to-service authentication using JWT tokens
 import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional
-from secrets_manager import get_secret
+from shared.secrets_manager import get_secret
 
 # Service-specific JWT secrets (loaded from Infisical vault in production)
 SERVICE_JWT_SECRETS = {

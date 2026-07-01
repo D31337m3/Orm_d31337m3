@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ShieldAlert, Bug, Lock, Mail, FileText } from "lucide-react";
+import { ShieldAlert, Bug, Lock, Mail } from "lucide-react";
 import api from "@/lib/api";
 
 function buildSecurityMailto(form) {
@@ -41,7 +41,7 @@ export default function SecurityCenter() {
     proof: "",
     accepted: false,
   });
-  const [sent, setSent] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [changelogs, setChangelogs] = useState(null);
   const [activeService, setActiveService] = useState(null);
   const [loadingChangelogs, setLoadingChangelogs] = useState(true);
@@ -84,6 +84,13 @@ export default function SecurityCenter() {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setSubmitted(true);
+    window.location.href = buildSecurityMailto(form);
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] text-white px-6 py-10">
       <div className="max-w-5xl mx-auto">
@@ -97,11 +104,10 @@ export default function SecurityCenter() {
           <h1 className="font-display font-black text-4xl mb-4">Security Operations and Responsible Disclosure</h1>
           <p className="font-mono text-zinc-300 leading-relaxed">
             D31337m3.com (pronounced <span className="text-white">delete me dot com</span>) is built around user-data protection first.
-            This page is the public gateway for responsible disclosure, trust incident reporting, and transparent security change auditing.
+            Use this page to report security issues, trust incidents, and problems affecting user safety or data handling.
           </p>
           <p className="font-mono text-zinc-400 leading-relaxed mt-3 text-sm">
-            We protect customer data using layered controls: authenticated sessions, isolated secrets, least-privilege service access,
-            and redacted public telemetry so sensitive operational details are not exposed.
+            We protect customer data using authenticated sessions, isolated secrets, least-privilege service access, and redacted public telemetry.
           </p>
           <div className="mt-4 font-mono text-sm text-zinc-300">
             Security inbox: <a className="text-white hover:text-[#FF3333]" href="mailto:security@d31337m3.com">security@d31337m3.com</a>
@@ -115,12 +121,12 @@ export default function SecurityCenter() {
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="brutal-card p-5">
             <ShieldAlert className="text-[#FF3333] mb-2" size={18} />
-            <div className="font-display font-black text-xl mb-2">Security Measures In Place</div>
+            <div className="font-display font-black text-xl mb-2">What We Protect</div>
             <ul className="font-mono text-xs text-zinc-400 space-y-1">
-              <li>JWT auth with service and user-token verification</li>
-              <li>Infisical-first secret lifecycle and key isolation</li>
-              <li>Public telemetry redaction with least-privilege exposure</li>
-              <li>Service-level health gates, rollback hooks, and runtime checks</li>
+              <li>User accounts and authentication flows</li>
+              <li>Saved signatures and legal documents</li>
+              <li>Profile data and disclosure reports</li>
+              <li>Operational telemetry and service integrity</li>
             </ul>
           </div>
           <div className="brutal-card p-5">
@@ -135,19 +141,15 @@ export default function SecurityCenter() {
           </div>
           <div className="brutal-card p-5">
             <Lock className="text-[#00FF41] mb-2" size={18} />
-            <div className="font-display font-black text-xl mb-2">Proposed Bounty Program</div>
+            <div className="font-display font-black text-xl mb-2">Disclosure Notes</div>
             <p className="font-mono text-xs text-zinc-400 leading-relaxed">
-              We reserve <span className="text-white">$1000</span> in a dedicated reward account. A validated and authentic exploit report with proof and responsible disclosure is eligible for:
+              Include clear steps, impact, and evidence. We respond faster when a report is reproducible and scoped.
             </p>
-            <ul className="font-mono text-xs text-zinc-400 mt-2 space-y-1">
-              <li>$1000 reward payout</li>
-              <li>6-month Pro subscription free</li>
-            </ul>
           </div>
         </section>
 
         <section className="brutal-card p-8 mb-6">
-          <div className="overline mb-2">// curte</div>
+          <div className="overline mb-2">// report guidance</div>
           <h2 className="font-display font-black text-2xl mb-2">CURTE Reporting Values</h2>
           <div className="font-mono text-xs text-zinc-400 grid grid-cols-1 md:grid-cols-2 gap-2">
             <div>C - Clear report scope and impact statement</div>
@@ -158,18 +160,10 @@ export default function SecurityCenter() {
           </div>
         </section>
 
-        <section className="brutal-card p-8">
+        <section className="brutal-card p-8 border border-[#FF3333]/50">
           <div className="overline mb-2">// submit exploit / bug report</div>
           <h2 className="font-display font-black text-2xl mb-6">Security Report Form</h2>
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!canSubmit) return;
-              window.location.href = buildSecurityMailto(form);
-              setSent(true);
-            }}
-          >
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <div className="overline mb-1">name</div>
@@ -236,7 +230,7 @@ export default function SecurityCenter() {
               <Mail size={14} /> Submit to security@d31337m3.com
             </button>
 
-            {sent && (
+            {submitted && (
               <div className="font-mono text-xs text-[#00FF41]">
                 Draft opened in your mail client. If needed, send directly to security@d31337m3.com and cc support@d31337m3.com.
               </div>
@@ -248,14 +242,14 @@ export default function SecurityCenter() {
           <div className="overline mb-2">// changelogs</div>
           <h2 className="font-display font-black text-2xl mb-2">Live Microservice Changelog Audit</h2>
           <p className="font-mono text-xs text-zinc-400 mb-6">
-            Public changelog for all microservices powering the d31337m3 platform.
-            Select a service to view its version history.
+            Public changelog for all microservices powering the d31337m3 platform. Select a service to view its version history.
           </p>
 
           <div className="flex flex-wrap gap-2 mb-6">
             {changelogs && Object.keys(changelogs).sort().map((svc) => (
               <button
                 key={svc}
+                type="button"
                 onClick={() => setActiveService(activeService === svc ? null : svc)}
                 className={`font-mono text-xs px-3 py-1.5 border transition-colors ${
                   activeService === svc
@@ -266,12 +260,8 @@ export default function SecurityCenter() {
                 {svc}
               </button>
             ))}
-            {loadingChangelogs && (
-              <span className="font-mono text-xs text-zinc-600">loading...</span>
-            )}
-            {!loadingChangelogs && changelogError && (
-              <span className="font-mono text-xs text-[#FF3333]">{changelogError}</span>
-            )}
+            {loadingChangelogs && <span className="font-mono text-xs text-zinc-600">loading...</span>}
+            {!loadingChangelogs && changelogError && <span className="font-mono text-xs text-[#FF3333]">{changelogError}</span>}
             {!loadingChangelogs && changelogError && (
               <button
                 type="button"

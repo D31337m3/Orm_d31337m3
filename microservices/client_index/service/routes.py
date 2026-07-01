@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 
 # Import shared components
 import sys
-sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
+sys.path.append('/home/D31337m3/Orm_d31337m3/microservices')
 
 from shared.jwt_utils import (
     create_service_token,
@@ -391,7 +391,7 @@ async def register_verify(payload: VerifyOtpIn, request: Request, db: Session = 
         "is_active": True,
         "plan_id": None,
         "subscription_status": "trial",
-        "subscription_started_at": None,
+        "subscription_started_at": datetime.now(timezone.utc),
     }
     promo = metadata.get("promo")
     if promo:
@@ -725,6 +725,80 @@ async def get_users(skip: int = 0, limit: int = 100, user: dict = Depends(requir
         "users": [_serialize_user(u) for u in users],
         "count": len(users)
     }
+
+
+@user_router.post("/")
+async def create_user_admin(payload: UserCreate, user: dict = Depends(require_service_auth("orchestrator")), db: Session = Depends(get_db)):
+    """Create a user directly from orchestrator admin controls (OTP bypass for admin ops)."""
+    email = payload.email.lower()
+    existing_user = UserRepository.get_by_email(db, email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    promo = None
+    if payload.promo_code and payload.promo_code.strip():
+        promo = find_promo_for_code(payload.promo_code, PROMO_CODES)
+        if not promo:
+            raise HTTPException(status_code=400, detail="Invalid promo code")
+        if promo_is_expired(promo):
+            raise HTTPException(status_code=400, detail="Promo code expired")
+
+    user_data = {
+        "id": generate_id(),
+        "email": email,
+        "name": payload.name or email.split("@")[0],
+        "password_hash": hash_password(payload.password),
+        "auth_provider": "password",
+        "is_admin": bool(payload.is_admin),
+        "is_active": bool(payload.is_active),
+        "plan_id": None,
+        "subscription_status": "trial",
+        "subscription_started_at": datetime.now(timezone.utc),
+    }
+    if promo:
+        user_data["promo_code"] = promo.get("code")
+        user_data["promo_discount_percent"] = promo.get("percent_off")
+        user_data["promo_expires_at"] = promo.get("expires_raw")
+
+    created_user = UserRepository.create(db, user_data)
+    UserSecurityRepository.ensure(db, created_user.id, email_verified=True)
+
+    ProfileRepository.create(db, {
+        "user_id": created_user.id,
+        "name": created_user.name,
+        "address": "",
+        "phone": "",
+        "country": "CA",
+        "state": "ON",
+    })
+
+    if created_user.name and len(created_user.name) >= 3 and "@" not in created_user.name:
+        KeywordRepository.create(db, {
+            "id": generate_id(),
+            "user_id": created_user.id,
+            "value": created_user.name,
+            "type": "name",
+        })
+
+    _audit_auth_event(
+        db,
+        "admin_user_created",
+        request=None,
+        user_id=created_user.id,
+        email=created_user.email,
+        detail={"created_by": user.get("iss") or "orchestrator", "promo": promo.get("code") if promo else None},
+    )
+
+    response_user = _serialize_user(
+        created_user,
+        type("SecurityState", (), {"email_verified": True, "two_fa_enabled": False})(),
+    )
+    if promo:
+        response_user["promo_code"] = promo.get("code")
+        response_user["promo_discount_percent"] = promo.get("percent_off")
+        response_user["promo_expires_at"] = promo.get("expires_raw")
+
+    return {"ok": True, "user": response_user}
 
 @user_router.get("/{user_id}")
 async def get_user(user_id: str, user: dict = Depends(require_service_auth()), db: Session = Depends(get_db)):

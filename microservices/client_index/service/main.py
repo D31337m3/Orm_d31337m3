@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Import shared components
 import sys
-sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
+sys.path.append('/home/D31337m3/Orm_d31337m3/microservices')
 
 from shared.jwt_utils import (
     create_service_token,

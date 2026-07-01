@@ -27,7 +27,7 @@ from datetime import datetime, timedelta, timezone
 
 # Import shared components
 import sys
-sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
+sys.path.append('/home/D31337m3/Orm_d31337m3/microservices')
 
 from shared.jwt_utils import (
     create_service_token,
@@ -78,6 +78,7 @@ SUPPORT_ANON_SESSIONS: Dict[str, Dict[str, Any]] = {}
 WORKFORCE_SHIFTS: Dict[str, Dict[str, Any]] = {}
 WORKFORCE_TIMESHEETS: Dict[str, Dict[str, Any]] = {}
 WORKFORCE_PAYROLL_RUNS: Dict[str, Dict[str, Any]] = {}
+SUPPORT_EMAIL_OTP_REQUIRED: bool = True
 _state_lock = threading.Lock()
 
 for _broker in BROKER_DIRECTORY:
@@ -116,6 +117,7 @@ def save_runtime_state() -> None:
         "support_chats": SUPPORT_CHATS,
         "support_messages": SUPPORT_MESSAGES,
         "support_tickets": SUPPORT_TICKETS,
+        "support_email_otp_required": SUPPORT_EMAIL_OTP_REQUIRED,
         "workforce_shifts": WORKFORCE_SHIFTS,
         "workforce_timesheets": WORKFORCE_TIMESHEETS,
         "workforce_payroll_runs": WORKFORCE_PAYROLL_RUNS,
@@ -138,6 +140,7 @@ def save_runtime_state() -> None:
 
 
 def load_runtime_state() -> None:
+    global SUPPORT_EMAIL_OTP_REQUIRED
     target = _runtime_state_path()
     if not os.path.exists(target):
         return
@@ -154,6 +157,7 @@ def load_runtime_state() -> None:
         SUPPORT_CHATS.clear(); SUPPORT_CHATS.update(payload.get("support_chats") or {})
         SUPPORT_MESSAGES.clear(); SUPPORT_MESSAGES.update(payload.get("support_messages") or {})
         SUPPORT_TICKETS.clear(); SUPPORT_TICKETS.update(payload.get("support_tickets") or {})
+        SUPPORT_EMAIL_OTP_REQUIRED = bool(payload.get("support_email_otp_required", SUPPORT_EMAIL_OTP_REQUIRED))
         WORKFORCE_SHIFTS.clear(); WORKFORCE_SHIFTS.update(payload.get("workforce_shifts") or {})
         WORKFORCE_TIMESHEETS.clear(); WORKFORCE_TIMESHEETS.update(payload.get("workforce_timesheets") or {})
         WORKFORCE_PAYROLL_RUNS.clear(); WORKFORCE_PAYROLL_RUNS.update(payload.get("workforce_payroll_runs") or {})
@@ -167,6 +171,16 @@ with _state_lock:
 
 def _cfg_int(key: str, default: int) -> int:
     return int(get_secret(key, str(default)) or str(default))
+
+
+def _cfg_bool(key: str, default: bool) -> bool:
+    fallback = "true" if default else "false"
+    raw = str(get_secret(key, fallback) or fallback).strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+SUPPORT_EMAIL_OTP_REQUIRED = _cfg_bool("SUPPORT_ANON_EMAIL_OTP_REQUIRED", True)
+TRIAL_PERIOD_DAYS = _cfg_int("TRIAL_PERIOD_DAYS", 30)
 
 
 def _support_anon_otp_ttl_minutes() -> int:
@@ -491,6 +505,7 @@ async def verify_employee_or_admin(
 
 
 async def verify_authenticated_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Security(bearing)
 ) -> dict:
     """Allow authenticated users (admin or customer) for support endpoints."""
@@ -500,6 +515,11 @@ async def verify_authenticated_user(
     token = credentials.credentials
     try:
         payload = verify_user_token(token)
+        _enforce_trial_paywall_for_request(
+            path=request.url.path,
+            auth_header=request.headers.get("authorization"),
+            payload=payload,
+        )
         payload["auth_type"] = "user"
         return payload
     except Exception:
@@ -772,6 +792,87 @@ def _find_user(user_id: str) -> Optional[Dict[str, Any]]:
             return u
     return None
 
+
+def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+def _is_subscription_active(status_value: Optional[str]) -> bool:
+    status_norm = str(status_value or "").strip().lower()
+    return status_norm in {"active", "paid", "subscribed"}
+
+
+def _payment_gate_allowed_path(path: str) -> bool:
+    normalized = str(path or "").rstrip("/")
+    if normalized.startswith("/api/payments"):
+        return True
+    return normalized in {
+        "/api/plans",
+        "/api/subscribe",
+        "/api/auth/me",
+    }
+
+
+def _get_subscription_status_from_payments(auth_header: Optional[str]) -> Optional[str]:
+    if not auth_header:
+        return None
+    try:
+        data = _payments_user_proxy("GET", "/api/subscriptions/", auth_header)
+        sub = data.get("subscription") or {}
+        return str(sub.get("status") or "").strip().lower() or None
+    except Exception:
+        return None
+
+
+def _enforce_trial_paywall_for_request(path: str, auth_header: Optional[str], payload: dict) -> None:
+    if _payment_gate_allowed_path(path):
+        return
+
+    if user_has_admin_access(payload.get("email"), bool(payload.get("is_admin"))):
+        return
+    if payload.get("employee_number"):
+        return
+
+    user_id = payload.get("sub")
+    if not user_id:
+        return
+
+    user = _find_user(user_id) or {}
+    created_at = _parse_iso_datetime(user.get("created_at"))
+    trial_started_at = _parse_iso_datetime(user.get("subscription_started_at")) or created_at
+    if not trial_started_at:
+        return
+
+    active_from_user = _is_subscription_active(user.get("subscription_status"))
+    active_from_payments = _is_subscription_active(_get_subscription_status_from_payments(auth_header))
+    if active_from_user or active_from_payments:
+        return
+
+    trial_days = max(1, int(TRIAL_PERIOD_DAYS))
+    trial_expires_at = trial_started_at + timedelta(days=trial_days)
+    now = datetime.now(timezone.utc)
+    if now < trial_expires_at:
+        return
+
+    raise HTTPException(
+        status_code=402,
+        detail={
+            "code": "TRIAL_EXPIRED",
+            "message": "Your free trial has ended. Subscribe to continue using features.",
+            "trial_period_days": trial_days,
+            "trial_started_at": trial_started_at.isoformat(),
+            "trial_expires_at": trial_expires_at.isoformat(),
+        },
+    )
+
 # Service registry (in production, this would be more sophisticated and persistent)
 SERVICE_REGISTRY: Dict[str, dict] = {}
 SERVICE_STARTUP_ORDER = [
@@ -948,6 +1049,7 @@ def _ensure_service_entry(service_name: str) -> Dict[str, Any]:
 def _refresh_registry_snapshot() -> None:
     """Refresh in-memory registry using live local health probes."""
     for service_name in SERVICE_STARTUP_ORDER:
+# Public changelog endpoint (no auth — serves changes.md for the public security portal)
         rec = _ensure_service_entry(service_name)
         probe = _probe_service_status(service_name)
         new_version = probe.get("version") or ""
@@ -1209,7 +1311,8 @@ async def public_health_summary():
         "timestamp": now_iso(),
     }
 
-# Public changelog endpoint (no auth — serves changes.md for the public security portal)
+
+
 @public_router.get("/changelogs")
 async def public_changelogs():
     """Aggregate all microservice changes.md files for public auditing."""
@@ -1908,11 +2011,46 @@ async def reputation_proxy(request: Request, token: dict = Depends(verify_authen
 
 
 # ==================== SUPPORT API ====================
+def _create_support_anon_session(email: str, ip: str) -> Dict[str, Any]:
+    chat = _create_anon_chat(email)
+    session_token = generate_id()
+    session_expires = datetime.now(timezone.utc) + timedelta(hours=_support_anon_session_hours())
+    SUPPORT_ANON_SESSIONS[session_token] = {
+        "session_token": session_token,
+        "chat_id": chat["id"],
+        "email": email,
+        "ip": ip,
+        "expires_at": session_expires.isoformat(),
+        "created_at": now_iso(),
+    }
+    return {
+        "session_token": session_token,
+        "session_expires_at": session_expires.isoformat(),
+        "chat": chat,
+        "messages": SUPPORT_MESSAGES.get(chat["id"], []),
+    }
+
+
 @support_router.post("/anon/start")
 async def support_anon_start(payload: SupportAnonStartIn, request: Request):
     run_support_state_cleanup()
     email = payload.email.lower()
     ip = request.client.host if request.client else "anon"
+
+    if not SUPPORT_EMAIL_OTP_REQUIRED:
+        session_data = _create_support_anon_session(email, ip)
+        AUDIT_LOG.append({
+            "id": generate_id(),
+            "at": now_iso(),
+            "actor_email": email,
+            "action": "support_anon_otp_bypassed",
+            "target_chat_id": session_data["chat"]["id"],
+        })
+        return {
+            "ok": True,
+            "otp_required": False,
+            **session_data,
+        }
 
     allowed, retry = _ratelimit(f"support-anon-start-ip:{ip}", max_attempts=8, window_seconds=15 * 60)
     if not allowed:
@@ -1957,6 +2095,7 @@ async def support_anon_start(payload: SupportAnonStartIn, request: Request):
     })
     return {
         "ok": True,
+        "otp_required": True,
         "challenge_id": challenge_id,
         "email_hint": _mask_email(email),
         "expires_in_seconds": otp_ttl_minutes * 60,
@@ -1967,6 +2106,14 @@ async def support_anon_start(payload: SupportAnonStartIn, request: Request):
 async def support_anon_resend(payload: SupportAnonResendIn, request: Request):
     run_support_state_cleanup()
     email = payload.email.lower()
+    if not SUPPORT_EMAIL_OTP_REQUIRED:
+        session_data = _create_support_anon_session(email, request.client.host if request.client else "anon")
+        return {
+            "ok": True,
+            "otp_required": False,
+            **session_data,
+        }
+
     challenge = SUPPORT_ANON_CHALLENGES.get(payload.challenge_id)
     if not challenge or challenge.get("email") != email:
         raise HTTPException(status_code=404, detail="Challenge not found")
@@ -1981,6 +2128,15 @@ async def support_anon_verify(payload: SupportAnonVerifyIn, request: Request):
     run_support_state_cleanup()
     email = payload.email.lower()
     ip = request.client.host if request.client else "anon"
+
+    if not SUPPORT_EMAIL_OTP_REQUIRED:
+        session_data = _create_support_anon_session(email, ip)
+        return {
+            "ok": True,
+            "otp_required": False,
+            **session_data,
+        }
+
     challenge = SUPPORT_ANON_CHALLENGES.get(payload.challenge_id)
     if not challenge or challenge.get("email") != email:
         raise HTTPException(status_code=404, detail="Challenge not found")
@@ -2000,31 +2156,19 @@ async def support_anon_verify(payload: SupportAnonVerifyIn, request: Request):
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
     challenge["verified"] = True
-    chat = _create_anon_chat(email)
-    session_token = generate_id()
-    session_expires = datetime.now(timezone.utc) + timedelta(hours=_support_anon_session_hours())
-    SUPPORT_ANON_SESSIONS[session_token] = {
-        "session_token": session_token,
-        "chat_id": chat["id"],
-        "email": email,
-        "ip": ip,
-        "expires_at": session_expires.isoformat(),
-        "created_at": now_iso(),
-    }
+    session_data = _create_support_anon_session(email, ip)
 
     AUDIT_LOG.append({
         "id": generate_id(),
         "at": now_iso(),
         "actor_email": email,
         "action": "support_anon_verified",
-        "target_chat_id": chat["id"],
+        "target_chat_id": session_data["chat"]["id"],
     })
     return {
         "ok": True,
-        "session_token": session_token,
-        "session_expires_at": session_expires.isoformat(),
-        "chat": chat,
-        "messages": SUPPORT_MESSAGES.get(chat["id"], []),
+        "otp_required": True,
+        **session_data,
     }
 
 
@@ -2536,6 +2680,43 @@ async def admin_users(token: dict = Depends(verify_admin_or_service)):
     return {"users": _fetch_users()}
 
 
+@admin_router.post("/users")
+async def admin_create_user(payload: dict, token: dict = Depends(verify_admin_or_service)):
+    actor = token.get("sub") or token.get("iss")
+    AUDIT_LOG.append({
+        "id": generate_id(),
+        "at": now_iso(),
+        "actor_email": actor,
+        "action": "user_create",
+        "target_email": payload.get("email"),
+    })
+
+    svc_token = create_service_token("orchestrator")
+    req = urllib.request.Request(
+        "http://127.0.0.1:8002/api/users/",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {svc_token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data
+    except urllib.error.HTTPError as e:
+        detail = "Failed to create user"
+        try:
+            err = json.loads(e.read().decode("utf-8"))
+            detail = err.get("detail") or detail
+        except Exception:
+            pass
+        raise HTTPException(status_code=e.code, detail=detail)
+    except Exception:
+        raise HTTPException(status_code=502, detail="User service unavailable")
+
+
 @admin_router.get("/users/{user_id}")
 async def admin_get_user(user_id: str, token: dict = Depends(verify_admin_or_service)):
     user = _find_user(user_id)
@@ -2922,7 +3103,40 @@ async def admin_ops_capabilities(token: dict = Depends(verify_admin_or_service))
     return {
         "host_controls_enabled": _host_controls_enabled(),
         "service_units": SYSTEMD_UNITS,
+        "support_email_otp_required": SUPPORT_EMAIL_OTP_REQUIRED,
         "note": "Set ADMIN_ENABLE_HOST_CONTROLS=true to enable restart/reboot endpoints.",
+    }
+
+
+@admin_router.get("/ops/support-email-otp")
+async def admin_support_email_otp_state(token: dict = Depends(verify_admin_or_service)):
+    return {
+        "ok": True,
+        "enabled": SUPPORT_EMAIL_OTP_REQUIRED,
+        "scope": "support_anonymous_chat",
+    }
+
+
+@admin_router.post("/ops/support-email-otp")
+async def admin_set_support_email_otp(payload: dict, token: dict = Depends(verify_admin_or_service)):
+    global SUPPORT_EMAIL_OTP_REQUIRED
+    if "enabled" not in payload:
+        raise HTTPException(status_code=400, detail="enabled is required")
+
+    SUPPORT_EMAIL_OTP_REQUIRED = bool(payload.get("enabled"))
+    save_runtime_state()
+    AUDIT_LOG.append({
+        "id": generate_id(),
+        "at": now_iso(),
+        "actor_email": token.get("sub") or token.get("iss"),
+        "action": "support_email_otp_toggle",
+        "ok": True,
+        "changes": {"enabled": SUPPORT_EMAIL_OTP_REQUIRED},
+    })
+    return {
+        "ok": True,
+        "enabled": SUPPORT_EMAIL_OTP_REQUIRED,
+        "scope": "support_anonymous_chat",
     }
 
 

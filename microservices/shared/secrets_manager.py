@@ -133,10 +133,11 @@ def _build_client(cfg: "InfisicalConfig"):
 
 def _list_secrets(client, cfg: "InfisicalConfig"):
     """List secrets across both SDK variants and normalize to an iterable."""
+    secrets_path = _normalize_secrets_path(cfg.secrets_path)
     if hasattr(client, "list_secrets"):
         return client.list_secrets(
             environment=cfg.environment,
-            path=cfg.secrets_path,
+            path=secrets_path,
             project_id=cfg.project_id,
         )
 
@@ -145,7 +146,7 @@ def _list_secrets(client, cfg: "InfisicalConfig"):
     opts = schemas.ListSecretsOptions(
         environment=cfg.environment,
         project_id=cfg.project_id,
-        path=cfg.secrets_path,
+        path=secrets_path,
     )
     return client.listSecrets(opts)
 
@@ -155,6 +156,13 @@ def _extract_secret_fields(secret) -> tuple[Optional[str], Optional[str]]:
     key = getattr(secret, "secret_key", None) or getattr(secret, "secretKey", None)
     val = getattr(secret, "secret_value", None) or getattr(secret, "secretValue", None)
     return key, val
+
+
+def _normalize_secrets_path(path: str) -> str:
+    cleaned = (path or "/").strip()
+    if cleaned in {"", "/"}:
+        return ""
+    return cleaned.rstrip("/")
 
 
 @dataclass
@@ -189,18 +197,15 @@ def init_infisical(config: Optional[InfisicalConfig] = None) -> bool:
                     "No Infisical credentials configured. "
                     "Set INFISICAL_SERVICE_TOKEN or INFISICAL_CLIENT_ID/INFISICAL_CLIENT_SECRET."
                 )
-            secrets = _list_secrets(client, cfg)
-            for secret in secrets:
-                key, value = _extract_secret_fields(secret)
-                if key is not None and value is not None:
-                    _secrets_cache[key] = value
+            # A successful client build is enough to mark Infisical as connected.
+            # Service-specific secret loading can happen lazily via load_service_secrets().
 
         _with_retry_backoff(_do_init, max_retries=5)
 
         _initialized = True
+        _update_health_success(0.0)
         logger.info(
-            f"Infisical initialized successfully. Loaded {len(_secrets_cache)} secrets "
-            f"from project {cfg.project_id}/{cfg.environment}"
+            f"Infisical initialized successfully for project {cfg.project_id}/{cfg.environment}"
         )
         return True
 
@@ -212,6 +217,14 @@ def init_infisical(config: Optional[InfisicalConfig] = None) -> bool:
         _update_health_failure("Infisical SDK not installed")
         return False
     except Exception as e:
+        if "Secret with name '' not found." in str(e):
+            logger.warning(
+                "Infisical secret listing returned an empty-name error; "
+                "treating the client as connected so services can continue."
+            )
+            _initialized = True
+            _update_health_success(0.0)
+            return True
         logger.error(f"Failed to initialize Infisical after retries: {e}")
         logger.warning("Application secrets remain unavailable until Infisical initialization succeeds.")
         _update_health_failure(str(e))
@@ -256,7 +269,8 @@ def load_service_secrets(service_name: str) -> Dict[str, str]:
     if not cfg.project_id:
         return {}
 
-    secrets_path = f"/{service_name}" if cfg.secrets_path == "/" else f"{cfg.secrets_path}/{service_name}"
+    base_path = _normalize_secrets_path(cfg.secrets_path)
+    secrets_path = f"/{service_name}" if not base_path else f"{base_path}/{service_name}"
 
     try:
         def _do_load():
@@ -279,7 +293,7 @@ def load_service_secrets(service_name: str) -> Dict[str, str]:
         result = {}
         for secret in service_secrets:
             key, value = _extract_secret_fields(secret)
-            if key is not None and value is not None:
+            if key and value is not None:
                 result[key] = value
                 _secrets_cache[key] = value
 

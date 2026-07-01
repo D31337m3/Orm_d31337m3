@@ -12,6 +12,8 @@ import AdminHealth from "@/components/AdminHealth";
 import AdminBrokerContacts from "@/components/AdminBrokerContacts";
 import AdminSettings from "@/components/AdminSettings";
 import AdminOperations from "@/components/AdminOperations";
+import adminApi from "@/lib/adminApi";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 const Stat = ({ label, value, testid }) => (
   <div className="brutal-card p-5" data-testid={testid}>
@@ -47,6 +49,17 @@ export default function Admin() {
   const [audit, setAudit] = useState([]);
   const [authEvents, setAuthEvents] = useState([]);
   const [documents, setDocuments] = useState([]);
+  const [createUserOpen, setCreateUserOpen] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [createUserError, setCreateUserError] = useState("");
+  const [createUserForm, setCreateUserForm] = useState({
+    email: "",
+    password: "",
+    name: "",
+    promo_code: "",
+    is_admin: false,
+    is_active: true,
+  });
   const [authEventsLoading, setAuthEventsLoading] = useState(false);
   const [authEventsError, setAuthEventsError] = useState("");
 
@@ -120,6 +133,36 @@ export default function Admin() {
   useEffect(() => { load(); }, [load]);
 
   const userById = (id) => users.find(u => u.id === id);
+
+  const submitCreateUser = async () => {
+    if (!createUserForm.email || !createUserForm.password) {
+      setCreateUserError("Email and password are required.");
+      return;
+    }
+    setCreatingUser(true);
+    setCreateUserError("");
+    try {
+      const res = await adminApi.createUser(createUserForm);
+      if (res?.ok === false) {
+        setCreateUserError(res?.message || "Create user endpoint unavailable.");
+        return;
+      }
+      setCreateUserOpen(false);
+      setCreateUserForm({
+        email: "",
+        password: "",
+        name: "",
+        promo_code: "",
+        is_admin: false,
+        is_active: true,
+      });
+      await load();
+    } catch (e) {
+      setCreateUserError(normalizeDetail(e?.response?.data?.detail || e?.message || "Failed to create user."));
+    } finally {
+      setCreatingUser(false);
+    }
+  };
 
   // ── Payment actions ─────────────────────────────────────────
   const confirmPayment = async (id) => { await api.post(`/admin/payments/${id}/confirm`); load(); setPaymentDetail(null); };
@@ -375,12 +418,27 @@ export default function Admin() {
         />
       )}
       {tab === "users" && (
-        <AdminTable
-          testid="admin-users" exportName="users"
-          data={users} columns={userColumns} filters={userFilters}
-          searchKeys={["email", "name", "id"]}
-          onRowClick={openUser}
-        />
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="font-mono text-xs text-zinc-500">Manage users and create accounts directly from admin.</div>
+            <button
+              onClick={() => {
+                setCreateUserError("");
+                setCreateUserOpen(true);
+              }}
+              className="brutal-btn brutal-btn-primary !py-2 !px-3"
+              data-testid="admin-open-create-user-dialog"
+            >
+              CREATE USER
+            </button>
+          </div>
+          <AdminTable
+            testid="admin-users" exportName="users"
+            data={users} columns={userColumns} filters={userFilters}
+            searchKeys={["email", "name", "id"]}
+            onRowClick={openUser}
+          />
+        </div>
       )}
       {tab === "emails" && (
         <AdminTable
@@ -575,6 +633,86 @@ export default function Admin() {
           </div>
         )}
       </Drawer>
+
+      <Dialog open={createUserOpen} onOpenChange={setCreateUserOpen}>
+        <DialogContent className="border border-[#222] bg-[#080808] text-white">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl">Create User</DialogTitle>
+            <DialogDescription className="font-mono text-xs text-zinc-400">
+              Create an account directly without email OTP flow.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input
+              className="brutal-input"
+              placeholder="Email"
+              type="email"
+              value={createUserForm.email}
+              onChange={(e) => setCreateUserForm((p) => ({ ...p, email: e.target.value }))}
+            />
+            <input
+              className="brutal-input"
+              placeholder="Password"
+              type="password"
+              value={createUserForm.password}
+              onChange={(e) => setCreateUserForm((p) => ({ ...p, password: e.target.value }))}
+            />
+            <input
+              className="brutal-input"
+              placeholder="Name (optional)"
+              value={createUserForm.name}
+              onChange={(e) => setCreateUserForm((p) => ({ ...p, name: e.target.value }))}
+            />
+            <input
+              className="brutal-input"
+              placeholder="Promo code (optional)"
+              value={createUserForm.promo_code}
+              onChange={(e) => setCreateUserForm((p) => ({ ...p, promo_code: e.target.value }))}
+            />
+          </div>
+
+          <div className="flex items-center gap-4 mt-2 font-mono text-xs text-zinc-300">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={createUserForm.is_admin}
+                onChange={(e) => setCreateUserForm((p) => ({ ...p, is_admin: e.target.checked }))}
+              />
+              Admin account
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={createUserForm.is_active}
+                onChange={(e) => setCreateUserForm((p) => ({ ...p, is_active: e.target.checked }))}
+              />
+              Active
+            </label>
+          </div>
+
+          {createUserError ? <div className="font-mono text-xs text-[#FF3333]">{createUserError}</div> : null}
+
+          <DialogFooter>
+            <button
+              className="brutal-btn"
+              onClick={() => setCreateUserOpen(false)}
+              disabled={creatingUser}
+              data-testid="admin-cancel-create-user"
+            >
+              Cancel
+            </button>
+            <button
+              className="brutal-btn brutal-btn-primary"
+              onClick={submitCreateUser}
+              disabled={creatingUser}
+              data-testid="admin-submit-create-user"
+            >
+              {creatingUser ? "CREATING..." : "Create User"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Document drawer */}
       <Drawer open={!!documentDetail} onClose={() => setDocumentDetail(null)} title={documentDetail ? documentDetail.title : ""} testid="document-drawer">

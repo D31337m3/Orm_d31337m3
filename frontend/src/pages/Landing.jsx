@@ -619,37 +619,7 @@ export default function Landing() {
               </div>
             </div>
 
-            <div className="mt-6 pt-4 border-t border-[#222]" data-testid="public-service-health">
-              <div className="overline mb-2 flex items-center justify-between">
-                <span>service.health (public)</span>
-                <span className="flex items-center gap-1.5 text-[#00FF41]"><span className="w-2 h-2 bg-[#00FF41] rounded-full blink"/>LIVE</span>
-              </div>
-              <div className="space-y-1">
-              {serviceHealth.map((svc) => {
-                const color = STATUS_COLOR[svc.status] || STATUS_COLOR.unknown;
-                const label = STATUS_LABEL[svc.status] || STATUS_LABEL.unknown;
-                const uptime = svc.started_at
-                  ? (() => {
-                      const diff = Date.now() - new Date(svc.started_at).getTime();
-                      const h = Math.floor(diff / 3600000);
-                      const m = Math.floor((diff % 3600000) / 60000);
-                      return `${h}h ${m}m`;
-                    })()
-                  : "";
-                return (
-                  <div key={svc.service} className="flex items-center gap-2 text-zinc-400 text-sm">
-                    <span className={`w-2 h-2 rounded-full ${color} shrink-0`} />
-                    <span className="text-white font-medium">{SERVICE_LABELS[svc.service] || svc.service}</span>
-                    <span className="text-zinc-600">{svc.version || "?"}</span>
-                    <span className={`uppercase text-xs font-bold ${color.replace("bg-", "text-")}`}>{label}</span>
-                    {uptime && <span className="text-zinc-600 text-xs">{uptime}</span>}
-                  </div>
-                );
-              })}
-              </div>
-              <div className="mt-3 text-zinc-500">Last checked: {new Date(healthLastChecked).toLocaleTimeString()}</div>
-              <div className="mt-2 text-zinc-600">Public-safe status only. Detailed security diagnostics are intentionally redacted.</div>
-            </div>
+
           </motion.div>
         </div>
       </motion.section>

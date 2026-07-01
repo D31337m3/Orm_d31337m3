@@ -8,7 +8,7 @@ import tempfile
 import threading
 
 import sys
-sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
+sys.path.append('/home/D31337m3/Orm_d31337m3/microservices')
 
 from shared.jwt_utils import verify_service_token, verify_user_token, user_has_admin_access
 from shared.database_models import generate_id, now_iso

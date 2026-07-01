@@ -13,6 +13,15 @@ if [[ ! -d "${VENV_DIR}" ]]; then
   exit 1
 fi
 
+# Load local Infisical runtime credentials if present so services can initialize secrets at startup.
+INFISICAL_ENV_FILE="${ROOT_DIR}/../.env.infisical.runtime"
+if [[ -f "${INFISICAL_ENV_FILE}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${INFISICAL_ENV_FILE}"
+  set +a
+fi
+
 # shellcheck disable=SC1091
 source "${VENV_DIR}/bin/activate"
 export PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}"

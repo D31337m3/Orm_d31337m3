@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { Copy, CheckCircle2 } from "lucide-react";
 
 export default function Billing() {
-  const { user, refresh } = useAuth();
+  const { user, refresh, trialGate, clearTrialGate } = useAuth();
   const [plans, setPlans] = useState([]);
   const [payments, setPayments] = useState([]);
   const [selPlan, setSelPlan] = useState("pro");
@@ -35,6 +35,9 @@ export default function Billing() {
       }
       const r = await api.post("/subscribe", body);
       setResult(r.data);
+      if (String(r.data?.status || "").toLowerCase() === "confirmed") {
+        clearTrialGate();
+      }
       load(); refresh();
     } catch (e) { setResult({ error: e.response?.data?.detail || "Failed" }); }
     finally { setBusy(false); }
@@ -48,6 +51,14 @@ export default function Billing() {
   return (
     <DashboardLayout title="Billing & Subscription">
       <PageBrandBanner title="billing" description="Purple-branded checkout for subscriptions and payment history." />
+      {trialGate?.code === "TRIAL_EXPIRED" ? (
+        <div className="brutal-card p-5 mb-6 border-[#FF3333]" data-testid="trial-paywall-banner">
+          <div className="font-display font-bold text-xl text-[#FF3333]">Trial Expired</div>
+          <div className="font-mono text-xs text-zinc-300 mt-2">
+            Your free trial ended{trialGate?.trial_expires_at ? ` on ${String(trialGate.trial_expires_at).slice(0, 10)}` : ""}. Subscribe to re-enable all features.
+          </div>
+        </div>
+      ) : null}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {plans.map(p => (
           <div key={p.id} data-testid={`billing-plan-${p.id}`}

@@ -80,6 +80,14 @@ export default function SupportChatWidget({ allowAnonymous = false }) {
     setNotice("");
     try {
       const r = await api.post("/support/anon/start", { email: anonEmail.trim().toLowerCase() });
+      if (r.data?.otp_required === false) {
+        setAnonSessionToken(r.data.session_token || "");
+        setAnonChat(r.data.chat || null);
+        setAnonMessages(r.data.messages || []);
+        setAnonChallengeId("");
+        setNotice("Anonymous support chat started without OTP verification.");
+        return;
+      }
       setAnonChallengeId(r.data.challenge_id);
       setNotice("Verification code sent. Check your email.");
     } catch (e) {
@@ -98,6 +106,14 @@ export default function SupportChatWidget({ allowAnonymous = false }) {
         challenge_id: anonChallengeId,
         email: anonEmail.trim().toLowerCase(),
       });
+      if (r.data?.otp_required === false) {
+        setAnonSessionToken(r.data.session_token || "");
+        setAnonChat(r.data.chat || null);
+        setAnonMessages(r.data.messages || []);
+        setAnonChallengeId("");
+        setNotice("Anonymous support chat started without OTP verification.");
+        return;
+      }
       setAnonChallengeId(r.data.challenge_id);
       setNotice("A new code was sent to your email.");
     } catch (e) {
@@ -120,10 +136,14 @@ export default function SupportChatWidget({ allowAnonymous = false }) {
         email: anonEmail.trim().toLowerCase(),
         otp: anonOtp.trim(),
       });
+      if (r.data?.otp_required === false) {
+        setNotice("Anonymous support chat started without OTP verification.");
+      } else {
+        setNotice("Email verified. You can now chat with support.");
+      }
       setAnonSessionToken(r.data.session_token || "");
       setAnonChat(r.data.chat || null);
       setAnonMessages(r.data.messages || []);
-      setNotice("Email verified. You can now chat with support.");
       setAnonOtp("");
     } catch (e) {
       setNotice(e?.response?.data?.detail || "OTP verification failed.");

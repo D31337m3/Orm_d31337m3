@@ -3,7 +3,7 @@ module.exports = {
     {
       name: "orchestrator",
       script: "./microservices/orchestrator/service/main.py",
-      interpreter: "python3",
+          interpreter: "python3",
       instances: 1,
       autorestart: true,
       watch: false,

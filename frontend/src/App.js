@@ -17,10 +17,11 @@ import SecurityCenter from "@/pages/SecurityCenter";
 import WorkforcePortal from "@/pages/WorkforcePortal";
 import SupportPortal from "@/pages/SupportPortal";
 
-const Protected = ({ children, admin = false }) => {
-  const { user, loading } = useAuth();
+const Protected = ({ children, admin = false, allowTrialExpired = false }) => {
+  const { user, loading, trialGate } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center text-white"><span className="font-mono">LOADING<span className="blink">_</span></span></div>;
   if (!user) return <Navigate to="/login" replace />;
+  if (!allowTrialExpired && trialGate?.code === "TRIAL_EXPIRED") return <Navigate to="/billing" replace />;
   if (admin && !user.is_admin) return <Navigate to="/dashboard" replace />;
   return children;
 };
@@ -38,7 +39,7 @@ function App() {
             <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
             <Route path="/keywords" element={<Protected><Keywords /></Protected>} />
             <Route path="/findings" element={<Protected><Findings /></Protected>} />
-            <Route path="/billing" element={<Protected><Billing /></Protected>} />
+            <Route path="/billing" element={<Protected allowTrialExpired><Billing /></Protected>} />
             <Route path="/documents" element={<Protected><Documents /></Protected>} />
             <Route path="/profile-signature" element={<Protected><ProfileSignature /></Protected>} />
             <Route path="/security" element={<Protected><Security /></Protected>} />

@@ -12,6 +12,7 @@ Environment=SERVICE_PORT=8005
 Environment=DATABASE_URL=sqlite:////home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_auditor.db
 Environment=INFISICAL_SITE_URL=https://app.infisical.com
 Environment=INFISICAL_ENVIRONMENT=prod
+EnvironmentFile=-/home/D31337m3/Orm_d31337m3/.env.infisical.runtime
 ExecStart=/home/D31337m3/Orm_d31337m3/microservices/.venv/bin/uvicorn service.main:app --host 127.0.0.1 --port 8005
 Restart=always
 RestartSec=5

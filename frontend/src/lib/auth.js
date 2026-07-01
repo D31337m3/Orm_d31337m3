@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import api from "@/lib/api";
 
 const AuthCtx = createContext(null);
@@ -19,20 +19,69 @@ function getOrCreateDeviceId() {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [trialGate, setTrialGate] = useState(null);
 
-  const refresh = async () => {
+  const clearTrialGate = useCallback(() => {
+    setTrialGate(null);
+    localStorage.removeItem("d31337m3_trial_gate");
+  }, []);
+
+  const setTrialGateFromDetail = useCallback((detail) => {
+    const payload = detail && typeof detail === "object" ? detail : { code: "TRIAL_EXPIRED" };
+    setTrialGate(payload);
+    localStorage.setItem("d31337m3_trial_gate", JSON.stringify(payload));
+  }, []);
+
+  const probeTrialAccess = useCallback(async () => {
+    try {
+      await api.get("/findings");
+      clearTrialGate();
+    } catch (e) {
+      const status = e?.response?.status;
+      const detail = e?.response?.data?.detail;
+      const code = typeof detail === "object" ? detail?.code : null;
+      if (!(status === 402 && code === "TRIAL_EXPIRED")) {
+        clearTrialGate();
+      }
+    }
+  }, [clearTrialGate]);
+
+  const refresh = useCallback(async () => {
     const token = localStorage.getItem("d31337m3_token");
     if (!token) { setUser(null); setLoading(false); return; }
     try {
       const r = await api.get("/auth/me");
       setUser(r.data.user);
+      if (localStorage.getItem("d31337m3_trial_gate")) {
+        await probeTrialAccess();
+      }
     } catch {
       localStorage.removeItem("d31337m3_token");
+      clearTrialGate();
       setUser(null);
     } finally { setLoading(false); }
-  };
+  }, [clearTrialGate, probeTrialAccess]);
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    const raw = localStorage.getItem("d31337m3_trial_gate");
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          setTrialGate(parsed);
+        }
+      } catch {
+        localStorage.removeItem("d31337m3_trial_gate");
+      }
+    }
+
+    const onTrialExpired = (evt) => {
+      setTrialGateFromDetail(evt?.detail);
+    };
+    window.addEventListener("d31337m3:trial-expired", onTrialExpired);
+    refresh();
+    return () => window.removeEventListener("d31337m3:trial-expired", onTrialExpired);
+  }, [refresh, setTrialGateFromDetail]);
 
   const login = async (email, password) => {
     const r = await api.post("/auth/login", { email, password }, {
@@ -47,6 +96,7 @@ export const AuthProvider = ({ children }) => {
       };
     }
     localStorage.setItem("d31337m3_token", r.data.token);
+    clearTrialGate();
     setUser(r.data.user);
     return r.data.user;
   };
@@ -62,6 +112,7 @@ export const AuthProvider = ({ children }) => {
       headers: { "X-Device-Id": getOrCreateDeviceId() }
     });
     localStorage.setItem("d31337m3_token", r.data.token);
+    clearTrialGate();
     setUser(r.data.user);
     return r.data.user;
   };
@@ -87,6 +138,7 @@ export const AuthProvider = ({ children }) => {
     }
     if (r.data?.token) {
       localStorage.setItem("d31337m3_token", r.data.token);
+      clearTrialGate();
       setUser(r.data.user);
       return r.data.user;
     }
@@ -100,6 +152,7 @@ export const AuthProvider = ({ children }) => {
       otp,
     });
     localStorage.setItem("d31337m3_token", r.data.token);
+    clearTrialGate();
     setUser(r.data.user);
     return r.data.user;
   };
@@ -115,10 +168,11 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem("d31337m3_token");
+    clearTrialGate();
     setUser(null);
   };
 
-  return <AuthCtx.Provider value={{ user, loading, login, verifyLoginOtp, resendLoginOtp, register, verifyRegistrationOtp, resendRegistrationOtp, logout, refresh }}>{children}</AuthCtx.Provider>;
+  return <AuthCtx.Provider value={{ user, loading, trialGate, clearTrialGate, login, verifyLoginOtp, resendLoginOtp, register, verifyRegistrationOtp, resendRegistrationOtp, logout, refresh }}>{children}</AuthCtx.Provider>;
 };
 
 export const useAuth = () => useContext(AuthCtx);

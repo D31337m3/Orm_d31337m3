@@ -34,16 +34,10 @@ export default function AdminOperations() {
   const [payments, setPayments] = useState([]);
   const [audit, setAudit] = useState([]);
   const [notice, setNotice] = useState("");
-  const [creating, setCreating] = useState(false);
   const [opsCapabilities, setOpsCapabilities] = useState({ host_controls_enabled: false, service_units: {} });
   const [busyOp, setBusyOp] = useState("");
-
-  const [newUser, setNewUser] = useState({
-    email: "",
-    password: "",
-    name: "",
-    promo_code: "",
-  });
+  const [supportEmailOtpRequired, setSupportEmailOtpRequired] = useState(true);
+  const [otpToggleBusy, setOtpToggleBusy] = useState(false);
 
   const refresh = async () => {
     setLoading(true);
@@ -55,12 +49,16 @@ export default function AdminOperations() {
         adminApi.listPayments(),
         adminApi.listAuditLog(),
       ]);
-      const caps = await adminApi.getOpsCapabilities();
+      const [caps, otpState] = await Promise.all([
+        adminApi.getOpsCapabilities(),
+        adminApi.getSupportEmailOtpState(),
+      ]);
       setTelemetry(t);
       setUsers(u || []);
       setPayments(p || []);
       setAudit(a || []);
       setOpsCapabilities(caps || { host_controls_enabled: false, service_units: {} });
+      setSupportEmailOtpRequired(Boolean(otpState?.enabled));
     } catch (err) {
       setNotice(err?.response?.data?.detail || "Failed to load operations data");
     } finally {
@@ -92,25 +90,29 @@ export default function AdminOperations() {
       .slice(0, 100);
   }, [audit]);
 
-  const createUser = async () => {
-    if (!newUser.email || !newUser.password) {
-      setNotice("Email and password are required");
-      return;
-    }
-    setCreating(true);
+  const toggleSupportEmailOtp = async () => {
+    const next = !supportEmailOtpRequired;
+    const confirmed = window.confirm(
+      next
+        ? "Enable support Email OTP verification now?"
+        : "Disable support Email OTP verification temporarily? Anonymous support chat will start without OTP."
+    );
+    if (!confirmed) return;
+
+    setOtpToggleBusy(true);
     try {
-      const res = await adminApi.createUser(newUser);
+      const res = await adminApi.setSupportEmailOtpState(next);
       if (res?.ok === false) {
-        setNotice(res.message || "Create user endpoint unavailable");
-      } else {
-        setNotice(`User created: ${newUser.email}`);
-        setNewUser({ email: "", password: "", name: "", promo_code: "" });
-        await refresh();
+        setNotice(res?.message || "Failed to update support OTP setting");
+        return;
       }
+      setSupportEmailOtpRequired(Boolean(res?.enabled));
+      setNotice(`Support Email OTP verification ${res?.enabled ? "enabled" : "disabled"}.`);
+      await refresh();
     } catch (err) {
-      setNotice(err?.response?.data?.detail || "Failed to create user");
+      setNotice(err?.response?.data?.detail || "Failed to update support OTP setting");
     } finally {
-      setCreating(false);
+      setOtpToggleBusy(false);
     }
   };
 
@@ -306,21 +308,22 @@ export default function AdminOperations() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card icon={Users} title="create user">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input className="brutal-input" placeholder="Email" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
-            <input className="brutal-input" placeholder="Password" type="password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} />
-            <input className="brutal-input" placeholder="Name (optional)" value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} />
-            <input className="brutal-input" placeholder="Promo code (optional)" value={newUser.promo_code} onChange={(e) => setNewUser({ ...newUser, promo_code: e.target.value })} />
-          </div>
-          <button className="brutal-btn brutal-btn-primary mt-3" onClick={createUser} disabled={creating}>{creating ? "CREATING..." : "CREATE USER"}</button>
-        </Card>
-
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
         <Card icon={Wrench} title="system maintenance">
           <div className="font-mono text-xs text-zinc-400 mb-3">Use these checks before cutover and after deploy.</div>
           <div className="flex gap-2 flex-wrap">
             <button className="brutal-btn !py-2 !px-3 text-xs" onClick={refresh}>Run telemetry sweep</button>
+            <button
+              className={`brutal-btn !py-2 !px-3 text-xs ${supportEmailOtpRequired ? "" : "!border-[#FFD700] !text-[#FFD700]"}`}
+              onClick={toggleSupportEmailOtp}
+              disabled={otpToggleBusy}
+            >
+              {otpToggleBusy
+                ? "UPDATING OTP..."
+                : supportEmailOtpRequired
+                ? "Disable Support Email OTP (Temporary)"
+                : "Enable Support Email OTP"}
+            </button>
             <button
               className="brutal-btn !py-2 !px-3 text-xs flex items-center gap-2"
               onClick={restartAll}
@@ -335,6 +338,9 @@ export default function AdminOperations() {
             >
               <Power size={12} /> Reboot Physical Server
             </button>
+          </div>
+          <div className="mt-3 font-mono text-[11px] text-zinc-500">
+            Support email OTP verification is currently: <span className={supportEmailOtpRequired ? "text-[#00FF41]" : "text-[#FFD700]"}>{supportEmailOtpRequired ? "ENABLED" : "DISABLED"}</span>
           </div>
         </Card>
       </div>

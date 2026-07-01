@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import sys
-sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
+sys.path.append('/home/D31337m3/Orm_d31337m3/microservices')
 
 from shared.database_models import now_iso
 from shared.secrets_manager import init_infisical, get_cors_allowed_origins

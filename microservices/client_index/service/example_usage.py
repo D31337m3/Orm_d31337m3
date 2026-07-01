@@ -8,7 +8,7 @@ import httpx
 import asyncio
 
 # Add shared and service directories to path
-sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
+sys.path.append('/home/D31337m3/Orm_d31337m3/microservices')
 sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/client_index/service')
 
 from shared.jwt_utils import create_service_token, verify_service_token

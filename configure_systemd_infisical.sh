@@ -27,6 +27,11 @@ for service_file in ${REPO_DIR}/microservices/systemd/d31337m3-*.service; do
     
     # Copy service file
     cp "${service_file}" "${dest_file}"
+
+    # Ensure services load the local Infisical runtime environment file.
+    if ! grep -q "^EnvironmentFile=-${REPO_DIR}/.env.infisical.runtime$" "${dest_file}"; then
+        sed -i "/^Environment=INFISICAL_ENVIRONMENT=/a EnvironmentFile=-${REPO_DIR}\\/.env.infisical.runtime" "${dest_file}"
+    fi
     
     # Add INFISICAL_SERVICE_TOKEN if not already present
     if ! grep -q "INFISICAL_SERVICE_TOKEN" "${dest_file}"; then

@@ -79,7 +79,7 @@ export const adminApi = {
   },
 
   async createUser(payload) {
-    return await tryPost(["/auth/register", "/users", "/admin/users"], payload, {
+    return await tryPost(["/admin/users", "/users", "/auth/register"], payload, {
       ok: false,
       message: "create user endpoint unavailable",
     });
@@ -213,7 +213,20 @@ export const adminApi = {
     ], {
       host_controls_enabled: false,
       service_units: {},
+      support_email_otp_required: true,
     });
+  },
+
+  async getSupportEmailOtpState() {
+    return await tryGet([
+      "/admin/ops/support-email-otp",
+    ], { ok: false, enabled: true, scope: "support_anonymous_chat" });
+  },
+
+  async setSupportEmailOtpState(enabled) {
+    return await tryPost([
+      "/admin/ops/support-email-otp",
+    ], { enabled: !!enabled }, { ok: false, message: "support email otp toggle endpoint unavailable" });
   },
 
   async restartService(serviceName) {

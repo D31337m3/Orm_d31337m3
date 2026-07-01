@@ -11,7 +11,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from datetime import datetime, timezone
 import json
-from secrets_manager import init_infisical, get_secret, get_bool_secret
+from shared.secrets_manager import init_infisical, get_secret, get_bool_secret
 
 logger = logging.getLogger(__name__)
 

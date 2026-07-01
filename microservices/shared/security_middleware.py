@@ -6,7 +6,7 @@ Provides authentication and authorization for service-to-service communication
 from typing import Optional
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jwt_utils import verify_service_token, verify_user_token
+from shared.jwt_utils import verify_service_token, verify_user_token
 
 # Security scheme
 bearer_scheme = HTTPBearer(auto_error=False)

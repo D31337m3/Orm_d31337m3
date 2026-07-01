@@ -11,7 +11,8 @@ from typing import Dict, List, Optional
 
 # Import shared components
 import sys
-sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
+sys.path.append('/home/D31337m3/Orm_d31337m3/microservices')
+sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/orchestrator/service')
 
 from shared.jwt_utils import create_service_token, verify_service_token, verify_user_token, create_user_token
 from shared.security_middleware import verify_service_request, require_service_auth, verify_user_request
@@ -23,7 +24,7 @@ from shared.secrets_manager import init_infisical, get_cors_allowed_origins
 init_infisical()
 
 # Import local routers
-from .routes import (
+from routes import (
     service_router,
     health_router,
     admin_router,

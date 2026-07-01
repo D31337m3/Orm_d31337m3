@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 
 # Import shared components
 import sys
-sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
+sys.path.append('/home/D31337m3/Orm_d31337m3/microservices')
 
 from shared.jwt_utils import create_service_token, verify_service_token, create_user_token, verify_user_token
 from shared.security_middleware import verify_service_request, verify_user_request, require_service_auth, require_user_auth
