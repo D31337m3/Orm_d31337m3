@@ -1,5 +1,11 @@
 # changes.md — watchdog
 
+## 1.0.4 (2026-07-01)
+
+### Changed
+- Release alignment bump for coordinated production rollout and service version parity.
+- Monitoring continuity validated after restart cycles across all orchestrated microservices.
+
 ## 1.0.3 (2026-07-01)
 
 ### Changed

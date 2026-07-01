@@ -21,7 +21,7 @@ from shared.secrets_manager import init_infisical, get_cors_allowed_origins
 init_infisical()
 
 # Import local routers
-from .routes import payment_router, subscription_router, webhook_router
+from .routes import payment_router, subscription_router, webhook_router, _payments_db_path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -34,7 +34,7 @@ STARTED_AT = now_iso()
 app = FastAPI(
     title="Payments Service",
     description="Payment processing and subscription management service",
-    version="1.0.3"
+    version="1.0.4"
 )
 
 # Add CORS middleware
@@ -58,6 +58,7 @@ async def health_check():
         "service": "payments",
         "status": "healthy",
         "version": app.version,
+        "db_path": _payments_db_path(),
         "started_at": STARTED_AT,
         "timestamp": now_iso()
     }

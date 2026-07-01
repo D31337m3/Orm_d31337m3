@@ -4,6 +4,8 @@ Handles SQLAlchemy ORM configuration and session management
 """
 
 import logging
+import os
+import shutil
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, Boolean, Text, Float, ForeignKey, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
@@ -15,7 +17,30 @@ logger = logging.getLogger(__name__)
 
 # Database URL configuration
 init_infisical()
-DATABASE_URL = get_secret("DATABASE_URL", "sqlite:////tmp/d31337m3.db")
+
+
+def _prepare_database_url(url: str) -> str:
+    if not url:
+        return url
+    if url.startswith("sqlite:///"):
+        sqlite_path = url.replace("sqlite:///", "", 1)
+        parent = os.path.dirname(sqlite_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        legacy_tmp_path = os.path.join("/tmp", os.path.basename(sqlite_path))
+        if sqlite_path.startswith("/home/D31337m3/Orm_d31337m3/microservices/state/"):
+            if os.path.exists(legacy_tmp_path) and not os.path.exists(sqlite_path):
+                try:
+                    shutil.copy2(legacy_tmp_path, sqlite_path)
+                    logger.warning(f"Migrated legacy sqlite DB from {legacy_tmp_path} to {sqlite_path}")
+                except Exception as e:
+                    logger.warning(f"Could not migrate legacy sqlite DB {legacy_tmp_path}: {e}")
+    return url
+
+
+DATABASE_URL = _prepare_database_url(
+    get_secret("DATABASE_URL", "sqlite:////home/D31337m3/Orm_d31337m3/microservices/state/d31337m3.db")
+)
 
 # Create engine with connection pooling
 engine = create_engine(
@@ -201,7 +226,62 @@ class Signature(Base):
         return {
             "id": self.id,
             "user_id": self.user_id,
+            "data_url": self.data_url,
             "full_name": self.full_name,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class Document(Base):
+    """Generated legal document model."""
+    __tablename__ = "documents"
+
+    id = Column(String(36), primary_key=True, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    template_id = Column(String(80), nullable=False)
+    finding_id = Column(String(36), nullable=True)
+    recipient_broker = Column(String(255), nullable=True)
+    recipient_address = Column(String(500), nullable=True)
+    country = Column(String(2), default="CA", nullable=False)
+    title = Column(String(255), nullable=False)
+    body = Column(Text, nullable=False)
+    status = Column(String(30), default="draft", nullable=False)
+    signed_at = Column(DateTime, nullable=True)
+    signature_image = Column(Text, nullable=True)
+    signed_name = Column(String(255), nullable=True)
+    witness_signed_at = Column(DateTime, nullable=True)
+    witness_signature_image = Column(Text, nullable=True)
+    witness_signed_name = Column(String(255), nullable=True)
+    witness_role = Column(String(80), nullable=True)
+    auto_filled_witness = Column(Boolean, default=False)
+    dispatched_to = Column(String(255), nullable=True)
+    dispatched_at = Column(DateTime, nullable=True)
+    dispatched_document_id = Column(String(120), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "template_id": self.template_id,
+            "finding_id": self.finding_id,
+            "recipient_broker": self.recipient_broker,
+            "recipient_address": self.recipient_address,
+            "country": self.country,
+            "title": self.title,
+            "body": self.body,
+            "status": self.status,
+            "signed_at": self.signed_at.isoformat() if self.signed_at else None,
+            "signature_image": self.signature_image,
+            "signed_name": self.signed_name,
+            "witness_signed_at": self.witness_signed_at.isoformat() if self.witness_signed_at else None,
+            "witness_signature_image": self.witness_signature_image,
+            "witness_signed_name": self.witness_signed_name,
+            "witness_role": self.witness_role,
+            "auto_filled_witness": bool(self.auto_filled_witness),
+            "dispatched_to": self.dispatched_to,
+            "dispatched_at": self.dispatched_at.isoformat() if self.dispatched_at else None,
+            "dispatched_document_id": self.dispatched_document_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

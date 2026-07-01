@@ -9,7 +9,7 @@ User=D31337m3
 WorkingDirectory=/home/D31337m3/Orm_d31337m3/microservices/payments
 Environment=PYTHONPATH=/home/D31337m3/Orm_d31337m3/microservices
 Environment=SERVICE_PORT=8003
-Environment=DATABASE_URL=sqlite:////tmp/d31337m3_payments.db
+Environment=DATABASE_URL=sqlite:////home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_payments.db
 Environment=INFISICAL_SITE_URL=https://app.infisical.com
 Environment=INFISICAL_ENVIRONMENT=prod
 ExecStart=/home/D31337m3/Orm_d31337m3/microservices/.venv/bin/uvicorn service.main:app --host 127.0.0.1 --port 8003

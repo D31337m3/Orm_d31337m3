@@ -1,5 +1,27 @@
 # changes.md — client_index
 
+## 1.0.6 (2026-07-01)
+
+### Changed
+- Release alignment bump for coordinated production rollout and service version parity.
+
+## 1.0.5 (2026-07-01)
+
+### Added
+- **Persistent signature + documents APIs**: Added durable endpoints backed by shared DB/repositories:
+  - `GET/POST /api/signature`
+  - `GET /api/countries`
+  - `GET /api/documents/templates`
+  - `GET /api/documents`
+  - `GET /api/documents/{id}`
+  - `DELETE /api/documents/{id}`
+  - `POST /api/documents/generate`
+  - `POST /api/documents/sign`
+
+### Changed
+- **Profile update reliability**: `PUT /api/profile` now creates profile records if absent, preventing first-save failures.
+- **Router wiring**: Registered signature/documents/meta routers in service startup.
+
 ## 1.0.4 (2026-07-01)
 
 ### Fixed

@@ -16,10 +16,12 @@ import urllib.request
 import urllib.error
 import sqlite3
 import threading
+import shutil
 import random
 import time
 import hmac
 import hashlib
+import tempfile
 from email.message import EmailMessage
 from datetime import datetime, timedelta, timezone
 
@@ -36,7 +38,9 @@ from shared.jwt_utils import (
 )
 from shared.security_middleware import verify_service_request, require_service_auth, verify_user_request
 from shared.database_models import generate_id, now_iso
-from shared.utils import SUPPORTED_COUNTRIES, DATA_BROKERS, BROKER_DIRECTORY, PLANS, RATE_LIMITS, RATE_WINDOW_SEC, RATE_MAX_ATTEMPTS
+from shared.database import SessionLocal, Finding
+from shared.repositories import SignatureRepository, ProfileRepository, UserRepository, DocumentRepository, KeywordRepository
+from shared.utils import SUPPORTED_COUNTRIES, DATA_BROKERS, BROKER_DIRECTORY, PLANS, RATE_LIMITS, RATE_WINDOW_SEC, RATE_MAX_ATTEMPTS, LEGAL_TEMPLATES, _fill_template
 from shared.secrets_manager import get_secret, get_infisical_status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -54,6 +58,7 @@ admin_router = APIRouter()
 support_router = APIRouter()
 workforce_router = APIRouter()
 public_router = APIRouter()
+client_router = APIRouter()
 
 # Security schemes
 bearing = HTTPBearer(auto_error=False)
@@ -73,6 +78,7 @@ SUPPORT_ANON_SESSIONS: Dict[str, Dict[str, Any]] = {}
 WORKFORCE_SHIFTS: Dict[str, Dict[str, Any]] = {}
 WORKFORCE_TIMESHEETS: Dict[str, Dict[str, Any]] = {}
 WORKFORCE_PAYROLL_RUNS: Dict[str, Dict[str, Any]] = {}
+_state_lock = threading.Lock()
 
 for _broker in BROKER_DIRECTORY:
     BROKER_CONTACTS[_broker["name"]] = {
@@ -88,6 +94,75 @@ for _broker in BROKER_DIRECTORY:
     }
 
 _support_db_lock = threading.Lock()
+
+
+def _runtime_state_path() -> str:
+    path = get_secret(
+        "ORCHESTRATOR_RUNTIME_STATE_PATH",
+        "/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_orchestrator_runtime.json",
+    ) or "/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_orchestrator_runtime.json"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    return path
+
+
+def save_runtime_state() -> None:
+    payload = {
+        "broker_contacts": BROKER_CONTACTS,
+        "email_log": EMAIL_LOG,
+        "payments": PAYMENTS,
+        "removals": REMOVALS,
+        "audit_log": AUDIT_LOG,
+        "documents": DOCUMENTS,
+        "support_chats": SUPPORT_CHATS,
+        "support_messages": SUPPORT_MESSAGES,
+        "support_tickets": SUPPORT_TICKETS,
+        "workforce_shifts": WORKFORCE_SHIFTS,
+        "workforce_timesheets": WORKFORCE_TIMESHEETS,
+        "workforce_payroll_runs": WORKFORCE_PAYROLL_RUNS,
+        "saved_at": now_iso(),
+    }
+    target = _runtime_state_path()
+    fd, tmp = tempfile.mkstemp(prefix="orchestrator_runtime_", suffix=".json", dir=os.path.dirname(target))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=True)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, target)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+
+
+def load_runtime_state() -> None:
+    target = _runtime_state_path()
+    if not os.path.exists(target):
+        return
+    try:
+        with open(target, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+
+        BROKER_CONTACTS.update(payload.get("broker_contacts") or {})
+        EMAIL_LOG[:] = payload.get("email_log") or []
+        PAYMENTS[:] = payload.get("payments") or []
+        REMOVALS[:] = payload.get("removals") or []
+        AUDIT_LOG[:] = payload.get("audit_log") or []
+        DOCUMENTS[:] = payload.get("documents") or []
+        SUPPORT_CHATS.clear(); SUPPORT_CHATS.update(payload.get("support_chats") or {})
+        SUPPORT_MESSAGES.clear(); SUPPORT_MESSAGES.update(payload.get("support_messages") or {})
+        SUPPORT_TICKETS.clear(); SUPPORT_TICKETS.update(payload.get("support_tickets") or {})
+        WORKFORCE_SHIFTS.clear(); WORKFORCE_SHIFTS.update(payload.get("workforce_shifts") or {})
+        WORKFORCE_TIMESHEETS.clear(); WORKFORCE_TIMESHEETS.update(payload.get("workforce_timesheets") or {})
+        WORKFORCE_PAYROLL_RUNS.clear(); WORKFORCE_PAYROLL_RUNS.update(payload.get("workforce_payroll_runs") or {})
+    except Exception as e:
+        logger.warning(f"orchestrator runtime state load warning: {e}")
+
+
+with _state_lock:
+    load_runtime_state()
 
 
 def _cfg_int(key: str, default: int) -> int:
@@ -143,7 +218,19 @@ def _max_support_messages_per_chat() -> int:
 
 
 def _support_db_path() -> str:
-    return get_secret("ORCHESTRATOR_SUPPORT_DB_PATH", "/tmp/d31337m3_orchestrator_support.db") or "/tmp/d31337m3_orchestrator_support.db"
+    legacy_path = "/tmp/d31337m3_orchestrator_support.db"
+    path = get_secret(
+        "ORCHESTRATOR_SUPPORT_DB_PATH",
+        "/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_orchestrator_support.db",
+    ) or "/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_orchestrator_support.db"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if os.path.exists(legacy_path) and not os.path.exists(path):
+        try:
+            shutil.copy2(legacy_path, path)
+            logger.warning(f"Migrated legacy DB from {legacy_path} to {path}")
+        except Exception as e:
+            logger.warning(f"Failed to migrate legacy DB {legacy_path}: {e}")
+    return path
 
 
 class SupportAnonStartIn(BaseModel):
@@ -648,6 +735,9 @@ def run_support_state_cleanup() -> Dict[str, int]:
             del bucket[:over]
             trimmed_messages += over
 
+    with _state_lock:
+        save_runtime_state()
+
     return {
         "removed_challenges": removed_challenges,
         "removed_sessions": removed_sessions,
@@ -802,12 +892,13 @@ def _probe_service_status(service_name: str) -> dict:
             "status": "healthy",
             "version": "1.0.5",
             "started_at": now_iso(),
+            "db_path": _support_db_path(),
             "last_health_check": now_iso(),
         }
 
     port = SERVICE_PORTS.get(service_name)
     if port is None:
-        return {"status": "not_registered", "version": None, "started_at": None, "last_health_check": None}
+        return {"status": "not_registered", "version": None, "started_at": None, "db_path": None, "last_health_check": None}
 
     url = f"http://127.0.0.1:{port}/health"
     try:
@@ -819,10 +910,11 @@ def _probe_service_status(service_name: str) -> dict:
                 "status": "healthy" if raw in ["healthy", "ok"] else "unhealthy",
                 "version": str(data.get("version", "") or ""),
                 "started_at": str(data.get("started_at", "") or ""),
+                "db_path": data.get("db_path"),
                 "last_health_check": now_iso(),
             }
     except Exception:
-        return {"status": "unhealthy", "version": None, "started_at": None, "last_health_check": now_iso()}
+        return {"status": "unhealthy", "version": None, "started_at": None, "db_path": None, "last_health_check": now_iso()}
 
 
 def _ensure_service_entry(service_name: str) -> Dict[str, Any]:
@@ -842,6 +934,7 @@ def _ensure_service_entry(service_name: str) -> Dict[str, Any]:
         "version": probe.get("version") or "",
         "last_version": "",
         "started_at": probe.get("started_at") or "",
+        "db_path": probe.get("db_path"),
         "last_health_check": probe["last_health_check"],
         "health_endpoint": "/health",
         "metadata": {},
@@ -864,6 +957,7 @@ def _refresh_registry_snapshot() -> None:
         rec["status"] = probe["status"]
         if probe.get("started_at"):
             rec["started_at"] = probe["started_at"]
+        rec["db_path"] = probe.get("db_path")
         rec["last_health_check"] = probe["last_health_check"]
         rec["updated_at"] = now_iso()
 
@@ -1057,6 +1151,7 @@ async def get_startup_sequence(token: dict = Depends(verify_admin_or_service)):
                 "version": service_info.get("version", ""),
                 "last_version": service_info.get("last_version", ""),
                 "started_at": service_info.get("started_at", ""),
+                "db_path": service_info.get("db_path"),
                 "host": service_info["host"],
                 "port": service_info["port"],
                 "last_health_check": service_info["last_health_check"]
@@ -1068,6 +1163,7 @@ async def get_startup_sequence(token: dict = Depends(verify_admin_or_service)):
                 "version": None,
                 "last_version": None,
                 "started_at": None,
+                "db_path": None,
                 "host": None,
                 "port": None,
                 "last_health_check": None
@@ -1097,6 +1193,7 @@ async def public_health_summary():
                 "status": info["status"],
                 "version": info.get("version", ""),
                 "started_at": info.get("started_at", ""),
+                "db_path": info.get("db_path"),
             })
         else:
             services.append({
@@ -1104,6 +1201,7 @@ async def public_health_summary():
                 "status": "unknown",
                 "version": None,
                 "started_at": None,
+                "db_path": None,
             })
     return {
         "services": services,
@@ -1178,6 +1276,635 @@ async def check_startup_sequence():
         "sequence_status": sequence_status,
         "all_services_ready": all(row["ready_for_next"] for row in sequence_status) if sequence_status else False,
     }
+
+
+def _client_index_user_proxy(method: str, path: str, auth_header: Optional[str], payload: Optional[dict] = None) -> Dict[str, Any]:
+    headers = {"Content-Type": "application/json"}
+    if auth_header:
+        headers["Authorization"] = auth_header
+
+    body = None
+    if payload is not None:
+        body = json.dumps(payload).encode("utf-8")
+
+    req = urllib.request.Request(
+        f"http://127.0.0.1:8002{path}",
+        data=body,
+        headers=headers,
+        method=method,
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as e:
+        detail = "Upstream request failed"
+        try:
+            err_raw = e.read().decode("utf-8")
+            err_json = json.loads(err_raw) if err_raw else {}
+            detail = err_json.get("detail") or detail
+        except Exception:
+            pass
+        raise HTTPException(status_code=e.code, detail=detail)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Client index service unavailable")
+
+
+def _payments_user_proxy(method: str, path: str, auth_header: Optional[str], payload: Optional[dict] = None) -> Dict[str, Any]:
+    headers = {"Content-Type": "application/json"}
+    if auth_header:
+        headers["Authorization"] = auth_header
+
+    body = None
+    if payload is not None:
+        body = json.dumps(payload).encode("utf-8")
+
+    req = urllib.request.Request(
+        f"http://127.0.0.1:8003{path}",
+        data=body,
+        headers=headers,
+        method=method,
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as e:
+        detail = "Payments request failed"
+        try:
+            err_raw = e.read().decode("utf-8")
+            err_json = json.loads(err_raw) if err_raw else {}
+            detail = err_json.get("detail") or detail
+        except Exception:
+            pass
+        raise HTTPException(status_code=e.code, detail=detail)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Payments service unavailable")
+
+
+def _can_fallback_from_proxy(err: HTTPException) -> bool:
+    status_code = int(getattr(err, "status_code", 500) or 500)
+    return status_code >= 500 or status_code in {404, 405, 501}
+
+
+@client_router.get("/signature")
+async def get_signature_proxy(request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("GET", "/api/signature", auth_header)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    db = SessionLocal()
+    try:
+        rec = SignatureRepository.get_latest_by_user_id(db, token.get("sub"))
+        return {"signature": rec.to_dict() if rec else None}
+    finally:
+        db.close()
+
+
+@client_router.post("/signature")
+async def upsert_signature_proxy(payload: dict, request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("POST", "/api/signature", auth_header, payload)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    data_url = str(payload.get("data_url") or "").strip()
+    full_name = str(payload.get("full_name") or "").strip()
+    if not data_url.startswith("data:image/"):
+        raise HTTPException(status_code=400, detail="Invalid signature image payload")
+    if not full_name:
+        raise HTTPException(status_code=400, detail="full_name is required")
+
+    db = SessionLocal()
+    try:
+        rec = SignatureRepository.upsert_for_user(db, token.get("sub"), data_url, full_name)
+        return {"ok": True, "signature": rec.to_dict()}
+    finally:
+        db.close()
+
+
+@client_router.get("/profile")
+async def get_profile_proxy(request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("GET", "/api/profile/", auth_header)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    user_id = token.get("sub")
+    db = SessionLocal()
+    try:
+        rec = ProfileRepository.get_by_user_id(db, user_id)
+        if not rec:
+            return {
+                "profile": {
+                    "user_id": user_id,
+                    "name": "",
+                    "address": "",
+                    "phone": "",
+                    "country": "CA",
+                    "state": "ON",
+                    "updated_at": now_iso(),
+                }
+            }
+        return {"profile": rec.to_dict()}
+    finally:
+        db.close()
+
+
+@client_router.put("/profile")
+async def update_profile_proxy(payload: dict, request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("PUT", "/api/profile/", auth_header, payload)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    user_id = token.get("sub")
+    db = SessionLocal()
+    try:
+        name_val = payload.get("name")
+        if isinstance(name_val, str) and name_val.strip():
+            UserRepository.update(db, user_id, {"name": name_val.strip()})
+
+        update_data = {
+            "name": payload.get("name"),
+            "address": payload.get("address"),
+            "phone": payload.get("phone"),
+            "country": payload.get("country"),
+            "state": payload.get("state"),
+        }
+        update_data = {k: v for k, v in update_data.items() if v is not None}
+
+        rec = ProfileRepository.update(db, user_id, update_data)
+        if not rec:
+            rec = ProfileRepository.create(db, {"user_id": user_id, **update_data})
+        return {"profile": rec.to_dict()}
+    finally:
+        db.close()
+
+
+@client_router.get("/countries")
+async def get_countries_proxy(request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("GET", "/api/countries", auth_header)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    return {"countries": SUPPORTED_COUNTRIES}
+
+
+@client_router.get("/plans")
+async def list_plans_proxy(request: Request, token: dict = Depends(verify_authenticated_user)):
+    plans = []
+    for _, plan in PLANS.items():
+        plans.append({
+            "id": plan.get("id"),
+            "name": plan.get("name"),
+            "price_usd": plan.get("price_usd"),
+            "features": [
+                f"Up to {plan.get('keyword_limit', 0)} monitored keywords",
+                f"{str(plan.get('scan_freq', 'daily')).capitalize()} scan cadence",
+                "Legal document workflow",
+            ],
+        })
+    return {"plans": plans}
+
+
+@client_router.get("/payments")
+async def list_payments_proxy(request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    return _payments_user_proxy("GET", "/api/payments/", auth_header)
+
+
+@client_router.post("/subscribe")
+async def subscribe_proxy(payload: dict, request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    normalized = {
+        "plan_id": payload.get("plan_id"),
+        "payment_method": payload.get("payment_method"),
+        "network": payload.get("network"),
+        "tx_hash": payload.get("tx_hash"),
+    }
+    return _payments_user_proxy("POST", "/api/payments/", auth_header, normalized)
+
+
+@client_router.get("/findings")
+async def list_findings_proxy(request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("GET", "/api/findings", auth_header)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(Finding)
+            .filter(Finding.user_id == token.get("sub"))
+            .order_by(Finding.discovered_at.desc())
+            .limit(500)
+            .all()
+        )
+        return {"findings": [r.to_dict() for r in rows]}
+    finally:
+        db.close()
+
+
+@client_router.post("/findings/removal-request")
+async def create_removal_request_proxy(payload: dict, request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("POST", "/api/findings/removal-request", auth_header, payload)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    finding_id = str(payload.get("finding_id") or "").strip()
+    if not finding_id:
+        raise HTTPException(status_code=400, detail="finding_id is required")
+
+    db = SessionLocal()
+    try:
+        finding = (
+            db.query(Finding)
+            .filter(Finding.id == finding_id, Finding.user_id == token.get("sub"))
+            .first()
+        )
+        if not finding:
+            raise HTTPException(status_code=404, detail="Finding not found")
+
+        broker_contact = BROKER_CONTACTS.get(finding.broker) or {}
+        rec = {
+            "id": generate_id(),
+            "user_id": token.get("sub"),
+            "finding_id": finding.id,
+            "broker": finding.broker,
+            "broker_email": broker_contact.get("email"),
+            "broker_form": broker_contact.get("form"),
+            "status": "submitted",
+            "created_at": now_iso(),
+            "removal_requested_at": now_iso(),
+        }
+        REMOVALS.append(rec)
+        with _state_lock:
+            save_runtime_state()
+        return {"ok": True, "removal": rec}
+    finally:
+        db.close()
+
+
+@client_router.get("/documents/templates")
+async def get_document_templates_proxy(request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("GET", "/api/documents/templates", auth_header)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    db = SessionLocal()
+    try:
+        profile_data = ProfileRepository.get_by_user_id(db, token.get("sub"))
+        country = (profile_data.country if profile_data and profile_data.country else "CA").upper()
+        templates = []
+        for _, tpl in LEGAL_TEMPLATES.items():
+            allowed = tpl.get("jurisdictions") or []
+            templates.append({
+                "id": tpl.get("id"),
+                "title": tpl.get("title"),
+                "summary": tpl.get("summary"),
+                "jurisdictions": allowed,
+                "available": country in allowed,
+            })
+        return {"templates": templates}
+    finally:
+        db.close()
+
+
+@client_router.get("/documents")
+async def list_documents_proxy(request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("GET", "/api/documents", auth_header)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    db = SessionLocal()
+    try:
+        rows = DocumentRepository.list_by_user_id(db, token.get("sub"), limit=500)
+        return {"documents": [r.to_dict() for r in rows]}
+    finally:
+        db.close()
+
+
+@client_router.get("/documents/{document_id}")
+async def get_document_proxy(document_id: str, request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("GET", f"/api/documents/{document_id}", auth_header)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    db = SessionLocal()
+    try:
+        rec = DocumentRepository.get_by_id_for_user(db, document_id, token.get("sub"))
+        if not rec:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return {"document": rec.to_dict()}
+    finally:
+        db.close()
+
+
+@client_router.delete("/documents/{document_id}")
+async def delete_document_proxy(document_id: str, request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("DELETE", f"/api/documents/{document_id}", auth_header)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    db = SessionLocal()
+    try:
+        ok = DocumentRepository.delete_for_user(db, document_id, token.get("sub"))
+        if not ok:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@client_router.post("/documents/generate")
+async def generate_document_proxy(payload: dict, request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("POST", "/api/documents/generate", auth_header, payload)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    template_id = str(payload.get("template_id") or "").strip()
+    if not template_id:
+        raise HTTPException(status_code=400, detail="template_id is required")
+
+    template = LEGAL_TEMPLATES.get(template_id)
+    if not template:
+        raise HTTPException(status_code=400, detail="Unsupported template_id")
+
+    db = SessionLocal()
+    try:
+        user_id = token.get("sub")
+        user_db = UserRepository.get_by_id(db, user_id)
+        profile_data = ProfileRepository.get_by_user_id(db, user_id)
+        country = (profile_data.country if profile_data and profile_data.country else "CA").upper()
+        country_cfg = SUPPORTED_COUNTRIES.get(country) or SUPPORTED_COUNTRIES["CA"]
+        if country not in (template.get("jurisdictions") or []):
+            raise HTTPException(status_code=400, detail="Template is not available for this country")
+
+        finding_id = payload.get("finding_id")
+        finding_url = ""
+        finding_data = ""
+        recipient_broker = str(payload.get("recipient_broker") or "").strip()
+        recipient_address = str(payload.get("recipient_address") or "").strip()
+        if finding_id:
+            finding = db.query(Finding).filter(Finding.id == finding_id, Finding.user_id == user_id).first()
+            if finding:
+                finding_url = finding.url or ""
+                finding_data = finding.data_found or ""
+                recipient_broker = recipient_broker or finding.broker
+
+        state_val = (profile_data.state if profile_data else "") or ""
+        state_clause = f", {state_val}" if state_val else ""
+        body = _fill_template(
+            template_id,
+            {
+                "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                "recipient_broker": recipient_broker,
+                "recipient_address": recipient_address,
+                "user_name": (profile_data.name if profile_data and profile_data.name else (user_db.name if user_db else "")) or "",
+                "user_email": (user_db.email if user_db else "") or "",
+                "user_address": (profile_data.address if profile_data else "") or "",
+                "user_phone": (profile_data.phone if profile_data else "") or "",
+                "finding_url": finding_url,
+                "finding_data": finding_data,
+                "country_name": country_cfg.get("name", ""),
+                "privacy_law": country_cfg.get("privacy_law", ""),
+                "state_clause": state_clause,
+            },
+        )
+
+        rec = DocumentRepository.create(
+            db,
+            {
+                "user_id": user_id,
+                "template_id": template_id,
+                "finding_id": finding_id,
+                "recipient_broker": recipient_broker,
+                "recipient_address": recipient_address,
+                "country": country,
+                "title": template.get("title") or template_id,
+                "body": body,
+            },
+        )
+        return {"ok": True, "document": rec.to_dict()}
+    finally:
+        db.close()
+
+
+@client_router.post("/documents/sign")
+async def sign_document_proxy(payload: dict, request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("POST", "/api/documents/sign", auth_header, payload)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    document_id = str(payload.get("document_id") or "").strip()
+    if not document_id:
+        raise HTTPException(status_code=400, detail="document_id is required")
+
+    db = SessionLocal()
+    try:
+        signature = SignatureRepository.get_latest_by_user_id(db, token.get("sub"))
+        if not signature:
+            raise HTTPException(status_code=400, detail="No signature on file")
+
+        witness_signed_at = payload.get("witness_signed_at")
+        witness_signed_at_dt = None
+        if witness_signed_at:
+            try:
+                witness_signed_at_dt = datetime.fromisoformat(str(witness_signed_at).replace("Z", "+00:00"))
+            except Exception:
+                witness_signed_at_dt = datetime.now(timezone.utc)
+
+        rec = DocumentRepository.sign_for_user(
+            db,
+            document_id,
+            token.get("sub"),
+            {
+                "signed_at": datetime.now(timezone.utc),
+                "signature_image": signature.data_url,
+                "signed_name": signature.full_name,
+                "witness_signature_image": payload.get("witness_signature_image"),
+                "witness_signed_name": payload.get("witness_signed_name"),
+                "witness_role": payload.get("witness_role"),
+                "witness_signed_at": witness_signed_at_dt,
+                "auto_filled_witness": payload.get("auto_filled_witness"),
+            },
+        )
+        if not rec:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        return {
+            "ok": True,
+            "document": rec.to_dict(),
+            "dispatch": {
+                "delivered": False,
+                "broker_email": None,
+                "form_url": None,
+            },
+        }
+    finally:
+        db.close()
+
+
+@client_router.get("/keywords")
+async def list_keywords_proxy(request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("GET", "/api/keywords", auth_header)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    db = SessionLocal()
+    try:
+        rows = KeywordRepository.get_by_user(db, token.get("sub"))
+        return {"keywords": [r.to_dict() for r in rows]}
+    finally:
+        db.close()
+
+
+@client_router.post("/keywords")
+async def create_keyword_proxy(payload: dict, request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("POST", "/api/keywords", auth_header, payload)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    value = str(payload.get("value") or "").strip()
+    key_type = str(payload.get("type") or "name").strip().lower() or "name"
+    if not value:
+        raise HTTPException(status_code=400, detail="value is required")
+
+    db = SessionLocal()
+    try:
+        rec = KeywordRepository.create(
+            db,
+            {
+                "user_id": token.get("sub"),
+                "value": value,
+                "type": key_type,
+            },
+        )
+        return {"ok": True, "keyword": rec.to_dict()}
+    finally:
+        db.close()
+
+
+@client_router.delete("/keywords/{keyword_id}")
+async def delete_keyword_proxy(keyword_id: str, request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("DELETE", f"/api/keywords/{keyword_id}", auth_header)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    db = SessionLocal()
+    try:
+        rec = KeywordRepository.get_by_id(db, keyword_id)
+        if not rec or rec.user_id != token.get("sub"):
+            raise HTTPException(status_code=404, detail="Keyword not found")
+        KeywordRepository.delete(db, keyword_id)
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@client_router.post("/scan/run")
+async def run_scan_proxy(payload: dict, request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("POST", "/api/scan/run", auth_header, payload)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    keyword_id = str(payload.get("keyword_id") or "").strip()
+    db = SessionLocal()
+    try:
+        if keyword_id:
+            rec = KeywordRepository.get_by_id(db, keyword_id)
+            if not rec or rec.user_id != token.get("sub"):
+                raise HTTPException(status_code=404, detail="Keyword not found")
+            KeywordRepository.update(db, keyword_id, {"last_scan_at": datetime.now(timezone.utc)})
+            return {"ok": True, "message": "Scan queued for selected keyword."}
+
+        for rec in KeywordRepository.get_by_user(db, token.get("sub")):
+            KeywordRepository.update(db, rec.id, {"last_scan_at": datetime.now(timezone.utc)})
+        return {"ok": True, "message": "Scan queued across your monitored keywords."}
+    finally:
+        db.close()
+
+
+@client_router.get("/reputation")
+async def reputation_proxy(request: Request, token: dict = Depends(verify_authenticated_user)):
+    auth_header = request.headers.get("authorization")
+    try:
+        return _client_index_user_proxy("GET", "/api/reputation", auth_header)
+    except HTTPException as e:
+        if not _can_fallback_from_proxy(e):
+            raise
+
+    db = SessionLocal()
+    try:
+        user_id = token.get("sub")
+        findings = db.query(Finding).filter(Finding.user_id == user_id).all()
+        active = sum(1 for f in findings if (f.status or "active") == "active")
+        removed = sum(1 for f in findings if (f.status or "") == "removed")
+        high_severity = sum(1 for f in findings if (f.status or "active") == "active" and (f.severity or "").lower() in {"high", "critical"})
+        pending_removal = sum(1 for r in REMOVALS if r.get("user_id") == user_id and r.get("status") not in {"removed", "closed"})
+
+        risk = (active * 8) + (high_severity * 10) + (pending_removal * 4)
+        score = max(0, min(100, 100 - risk))
+        return {
+            "score": score,
+            "breakdown": {
+                "active": active,
+                "removed": removed,
+                "pending_removal": pending_removal,
+                "high_severity": high_severity,
+            },
+        }
+    finally:
+        db.close()
 
 
 # ==================== SUPPORT API ====================
@@ -1830,8 +2557,31 @@ async def admin_patch_user(user_id: str, payload: dict, token: dict = Depends(ve
     user = _find_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    merged = {**user, **payload}
-    return {"ok": True, "user": merged}
+
+    svc_token = create_service_token("orchestrator")
+    req = urllib.request.Request(
+        f"http://127.0.0.1:8002/api/users/{user_id}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {svc_token}",
+            "Content-Type": "application/json",
+        },
+        method="PATCH",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return {"ok": bool(data.get("ok", True)), "user": data.get("user")}
+    except urllib.error.HTTPError as e:
+        detail = "Failed to patch user"
+        try:
+            err = json.loads(e.read().decode("utf-8"))
+            detail = err.get("detail") or detail
+        except Exception:
+            pass
+        raise HTTPException(status_code=e.code, detail=detail)
+    except Exception:
+        raise HTTPException(status_code=502, detail="User service unavailable")
 
 
 @admin_router.delete("/users/{user_id}")
@@ -2018,8 +2768,16 @@ async def admin_health(token: dict = Depends(verify_admin_or_service)):
             "detail": "configured" if _secret("PAYPAL_CLIENT_ID") else "not configured",
         },
     ]
+    service_db_paths = [
+        {
+            "service": name,
+            "status": SERVICE_REGISTRY.get(name, {}).get("status", "unknown"),
+            "db_path": SERVICE_REGISTRY.get(name, {}).get("db_path"),
+        }
+        for name in SERVICE_STARTUP_ORDER
+    ]
     overall_ok = all(c["status"] != "fail" for c in checks)
-    return {"ok": overall_ok, "checked_at": now_iso(), "checks": checks}
+    return {"ok": overall_ok, "checked_at": now_iso(), "checks": checks, "service_db_paths": service_db_paths}
 
 
 @admin_router.post("/health/smtp-test")

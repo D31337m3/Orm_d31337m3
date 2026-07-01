@@ -1,5 +1,18 @@
 # changes.md — support_hub
 
+## 1.0.7 (2026-07-01)
+
+### Changed
+- Release alignment bump for coordinated production rollout and service version parity.
+
+## 1.0.6 (2026-07-01)
+
+### Added
+- **Persistent in-memory store snapshots**: Added atomic JSON state save/load for chat sessions, chat messages, and tickets.
+
+### Changed
+- **Write durability**: Mutating operations and eviction paths now trigger persisted state checkpoints so data survives service restarts/reboots.
+
 ## 1.0.5 (2026-07-01)
 
 ### Changed

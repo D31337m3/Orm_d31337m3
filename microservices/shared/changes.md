@@ -1,5 +1,20 @@
 # changes.md — shared
 
+## 1.0.3 (2026-07-01)
+
+### Changed
+- Release alignment bump for coordinated production rollout and shared package parity.
+
+## 1.0.2 (2026-07-01)
+
+### Added
+- **Durable legal document model**: Added `Document` ORM model with signing metadata, dispatch fields, and witness fields.
+- **Witness metadata in API schema**: Extended `DocumentInDB` with witness fields (`witness_signed_*`, role, auto-fill flag).
+- **Repositories**: Added `SignatureRepository` (latest/upsert) and `DocumentRepository` (create/list/get/delete/sign).
+
+### Changed
+- **Signature serialization**: `Signature.to_dict()` now includes `data_url` for owner-facing retrieval/update flows.
+
 ## 1.0.1 (2026-07-01)
 
 ### Changed

@@ -27,7 +27,7 @@ STARTED_AT = now_iso()
 app = FastAPI(
     title="Support Hub Service",
     description="Live support chat and trouble ticket management",
-    version="1.0.5",
+    version="1.0.7",
 )
 
 app.add_middleware(
@@ -56,7 +56,7 @@ async def health_check():
 async def root():
     return {
         "service": "support_hub",
-        "version": "1.0.0",
+        "version": app.version,
         "description": "Live support chat and trouble ticket management",
         "endpoints": {
             "health": "/health",

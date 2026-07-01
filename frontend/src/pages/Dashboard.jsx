@@ -8,6 +8,9 @@ import { motion } from "framer-motion";
 import { Play, AlertTriangle, FileSignature, Sparkles } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, BarChart, Bar, XAxis, Tooltip, Cell } from "recharts";
 import BrokerSubmissionDialog from "@/components/BrokerSubmissionDialog";
+import CanadaFlag from "@/components/CanadaFlag";
+import USFlag from "@/components/USFlag";
+import MexicoFlag from "@/components/MexicoFlag";
 
 const SEV_COLOR = { low: "#71717a", medium: "#FFD700", high: "#fb923c", critical: "#FF3333" };
 
@@ -232,7 +235,11 @@ export default function Dashboard() {
           <div className="font-display font-black text-xl mb-2">Generate Legal Documents</div>
           <div className="font-mono text-xs text-zinc-400 mb-4 leading-relaxed">
             DMCA takedowns, Cease &amp; Desist, CCPA/PIPEDA removal requests — pre-filled and e-signed.
-            🇨🇦 🇺🇸 🇲🇽
+          </div>
+          <div className="mb-4 flex items-center gap-2 font-mono text-[11px] text-zinc-400">
+            <CanadaFlag size={10} /> Canada
+            <USFlag size={10} /> U.S.A
+            <MexicoFlag size={10} /> Mexico
           </div>
           <Link to="/documents" data-testid="dashboard-docs-cta" className="brutal-btn brutal-btn-primary w-full block text-center">
             Open Documents →

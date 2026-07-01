@@ -21,7 +21,7 @@ from shared.jwt_utils import (
 )
 from shared.security_middleware import verify_service_request, verify_user_request, require_service_auth, require_user_auth
 from shared.database_models import *
-from shared.database import SessionLocal
+from shared.database import SessionLocal, DATABASE_URL
 from shared.repositories import UserRepository, UserSecurityRepository
 from shared.utils import now_iso, hash_password, verify_password, SUPPORTED_COUNTRIES, LEGAL_TEMPLATES, _fill_template
 from shared.secrets_manager import init_infisical, get_secret, get_cors_allowed_origins
@@ -30,7 +30,7 @@ from shared.secrets_manager import init_infisical, get_secret, get_cors_allowed_
 init_infisical()
 
 # Import local routers
-from .routes import auth_router, user_router, profile_router
+from .routes import auth_router, user_router, profile_router, signature_router, documents_router, meta_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -39,11 +39,17 @@ logger = logging.getLogger("client_index")
 CORS_ALLOWED_ORIGINS = get_cors_allowed_origins()
 STARTED_AT = now_iso()
 
+
+def _effective_db_path() -> str:
+    if DATABASE_URL.startswith("sqlite:///"):
+        return DATABASE_URL.replace("sqlite:///", "", 1)
+    return DATABASE_URL
+
 # Create FastAPI app
 app = FastAPI(
     title="Client Index Service",
     description="User authentication and profile management service",
-    version="1.0.4"
+    version="1.0.6"
 )
 
 # Add CORS middleware
@@ -59,6 +65,9 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/auth", tags=["authentication"])
 app.include_router(user_router, prefix="/api/users", tags=["users"])
 app.include_router(profile_router, prefix="/api/profile", tags=["profile"])
+app.include_router(signature_router, prefix="/api/signature", tags=["signature"])
+app.include_router(documents_router, prefix="/api/documents", tags=["documents"])
+app.include_router(meta_router, prefix="/api", tags=["meta"])
 
 # Health check endpoint
 @app.get("/health")
@@ -67,6 +76,7 @@ async def health_check():
         "service": "client_index",
         "status": "healthy",
         "version": app.version,
+        "db_path": _effective_db_path(),
         "started_at": STARTED_AT,
         "timestamp": now_iso()
     }
@@ -76,7 +86,7 @@ async def health_check():
 async def root():
     return {
         "service": "client_index",
-        "version": "1.0.0",
+        "version": app.version,
         "description": "User authentication and profile management service",
         "endpoints": {
             "health": "/health",

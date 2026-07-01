@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Marquee from "react-fast-marquee";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Terminal, Shield, Database, Bell, Activity, Lock, Search, FileSignature, Gavel, Globe } from "lucide-react";
 import FeatureDialog from "@/components/FeatureDialog";
 import CanadaFlag from "@/components/CanadaFlag";
+import USFlag from "@/components/USFlag";
+import MexicoFlag from "@/components/MexicoFlag";
+import SecurityCertifiedBadge from "@/components/SecurityCertifiedBadge";
 import BrokerSubmissionDialog from "@/components/BrokerSubmissionDialog";
 import api from "@/lib/api";
 
@@ -57,7 +60,7 @@ const FEATURES = [
     body: "We generate jurisdiction-aware legal documents — DMCA takedown notices, cease & desist letters, CCPA / CPRA deletion requests, PIPEDA & Quebec Law 25 removal demands, and Right-to-be-Forgotten requests for Google & Bing — pre-filled with your data and ready to e-sign in one click.",
     howItWorks: [
       "Pick a finding from your dashboard.",
-      "Choose the appropriate template (auto-filtered to your jurisdiction: 🇨🇦 🇺🇸 🇲🇽).",
+      "Choose the appropriate template (auto-filtered to your jurisdiction: Canada, U.S.A, Mexico).",
       "Draw your e-signature once in the dashboard (ESIGN / UECA / LFFEA compliant).",
       "We affix your signature and dispatch to the broker. Track status until removed.",
     ],
@@ -200,13 +203,13 @@ const STATUS_COLOR = { healthy: "bg-[#00FF41]", degraded: "bg-[#FFA500]", unheal
 const STATUS_LABEL = { healthy: "UP", degraded: "DEGR", unhealthy: "DOWN", unknown: "???" };
 
 const LAUNCH_ANNOUNCEMENT_PREVIEW =
-  "D31337m3.com (pronounced delete me dot com) is shipping a security-first refactor focused on reliability, privacy controls, and trust.";
+  "D31337m3 is now live with stronger privacy tooling, live exposure telemetry, and hardened security controls built to protect user data.";
 
 const LAUNCH_ANNOUNCEMENT_FULL = [
-  "D31337m3.com (pronounced delete me dot com) is in an active security-first refactor of our Privacy and Reputation Management platform.",
-  "Security measures in place include JWT-based authentication, service-to-service verification, Infisical-first secret handling with fallback controls, public telemetry redaction, and gated operational runbooks for deployment and rollback.",
-  "If you encounter bugs, broken flows, trust voidances, known exploit regressions, or suspected breaches, contact support@d31337m3.com or security@d31337m3.com. Reports to security@d31337m3.com are filtered and forwarded to admins/security team members.",
-  "Thank you for your patience while we complete this refactored vision. We are also proposing a bounty program with a dedicated $1000 reward reserve plus a free 6-month Pro subscription for validated, authentic reports submitted with proof and responsible disclosure.",
+  "D31337m3.com (delete me dot com) has officially launched with live broker scanning, legal-document automation, and real-time privacy risk tracking.",
+  "Security controls protecting user data include signed JWT sessions, service-token verification between microservices, Infisical-managed secrets, strict public telemetry redaction, and auditable health gates for operational changes.",
+  "Your legal signatures and profile actions are persisted with service-level reliability checks so documents, findings, and account protections remain stable after restarts.",
+  "If you detect suspicious behavior, security regressions, or potential abuse vectors, report immediately to security@d31337m3.com (with support@d31337m3.com as backup) for triage by the security/admin response team.",
 ];
 
 function sampleHeroText() {
@@ -247,11 +250,23 @@ export default function Landing() {
     return () => clearInterval(timer);
   }, []);
 
+  const serviceHealthStats = useMemo(() => {
+    const total = serviceHealth.length;
+    const healthy = serviceHealth.filter((svc) => svc.status === "healthy").length;
+    const degraded = serviceHealth.filter((svc) => svc.status === "degraded").length;
+    const unhealthy = serviceHealth.filter((svc) => svc.status === "unhealthy").length;
+    const unknown = Math.max(0, total - healthy - degraded - unhealthy);
+    const reliabilityScore = total
+      ? Math.round(((healthy + degraded * 0.5) / total) * 100)
+      : 0;
+    return { total, healthy, degraded, unhealthy, unknown, reliabilityScore };
+  }, [serviceHealth]);
+
   useEffect(() => {
     let mounted = true;
     const fetchHealth = async () => {
       try {
-        const res = await api.get("/api/public/health-summary");
+        const res = await api.get("/public/health-summary");
         if (!mounted) return;
         setServiceHealth(res.data.services || []);
         setHealthLastChecked(Date.now());
@@ -372,6 +387,11 @@ export default function Landing() {
               </div>
             </div>
           )}
+
+          <div className="mt-6 pt-4 border-t border-[#1f1f1f] flex flex-wrap items-center gap-3">
+            <SecurityCertifiedBadge />
+            <span className="font-mono text-xs text-zinc-500">User-data protection controls: JWT auth, secret isolation, redacted telemetry.</span>
+          </div>
 
           <button
             type="button"
@@ -560,27 +580,43 @@ export default function Landing() {
               <span>live.feed</span>
               <span className="flex items-center gap-1.5"><span className="w-2 h-2 bg-[#00FF41] rounded-full blink"/>LIVE</span>
             </div>
-            {[
-              ["spokeo.com", "1,284 records removed", "#00FF41"],
-              ["whitepages.com", "892 records removed", "#00FF41"],
-              ["beenverified.com", "743 records removed", "#00FF41"],
-              ["google search", "146 urls de-indexed", "#00FF41"],
-              ["bing search", "98 urls de-indexed", "#00FF41"],
-              ["acxiom", "312 pending", "#FFD700"],
-              ["intelius", "scan in progress", "#FF3333"],
-            ].map(([name, status, color], i) => (
-              <motion.div key={name}
-                initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.6 + i * 0.08 }}
-                className="text-zinc-400 mb-1">
-                › <span style={{ color }}>{name}</span> · {status}{i === 6 && <span className="blink">_</span>}
-              </motion.div>
-            ))}
+            {serviceHealth.length > 0 ? (
+              serviceHealth.map((svc, i) => {
+                const label = SERVICE_LABELS[svc.service] || svc.service;
+                const state = String(svc.status || "unknown").toUpperCase();
+                const color = svc.status === "healthy"
+                  ? "#00FF41"
+                  : svc.status === "degraded"
+                    ? "#FFD700"
+                    : svc.status === "unhealthy"
+                      ? "#FF3333"
+                      : "#A1A1AA";
+                const version = svc.version || "n/a";
+                return (
+                  <motion.div key={svc.service}
+                    initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.6 + i * 0.08 }}
+                    className="text-zinc-400 mb-1">
+                    › <span style={{ color }}>{label}</span> · {state} · v{version}{i === serviceHealth.length - 1 && <span className="blink">_</span>}
+                  </motion.div>
+                );
+              })
+            ) : (
+              <div className="text-zinc-500">› awaiting live service telemetry<span className="blink">_</span></div>
+            )}
             <div className="mt-6 pt-4 border-t border-[#222]">
-              <div className="overline mb-2">reputation_score</div>
+              <div className="overline mb-2">service_reliability_score</div>
               <motion.div
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}
-                className="font-display font-black text-5xl text-[#00FF41]">87<span className="text-base text-zinc-500">/100</span></motion.div>
+                className="font-display font-black text-5xl text-[#00FF41]">
+                {serviceHealthStats.reliabilityScore}<span className="text-base text-zinc-500">/100</span>
+              </motion.div>
+              <div className="mt-2 text-zinc-500">
+                {serviceHealthStats.healthy}/{serviceHealthStats.total || "0"} services healthy
+                {serviceHealthStats.degraded > 0 ? ` · ${serviceHealthStats.degraded} degraded` : ""}
+                {serviceHealthStats.unhealthy > 0 ? ` · ${serviceHealthStats.unhealthy} down` : ""}
+                {serviceHealthStats.unknown > 0 ? ` · ${serviceHealthStats.unknown} unknown` : ""}
+              </div>
             </div>
 
             <div className="mt-6 pt-4 border-t border-[#222]" data-testid="public-service-health">
@@ -633,13 +669,20 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <CanadaFlag size={28} />
+            <USFlag size={28} />
             <div>
-              <div className="font-display font-black text-2xl tracking-tight">Made &amp; hosted in Canada. 🇨🇦</div>
+              <div className="font-display font-black text-2xl tracking-tight">Proudly made in Canada + hosted in the U.S.A</div>
               <div className="font-mono text-xs text-zinc-500 mt-1">Compliant with PIPEDA, Quebec Law 25, CCPA/CPRA, and LFPDPPP.</div>
             </div>
           </div>
-          <div className="font-mono text-xs text-zinc-500 text-right">
-            Coverage: <span className="text-white">🇨🇦 Canada · 🇺🇸 United States · 🇲🇽 México</span>
+          <div className="font-mono text-xs text-zinc-500 text-right flex items-center gap-2">
+            <span>Coverage:</span>
+            <CanadaFlag size={12} />
+            <span className="text-white">Canada</span>
+            <USFlag size={12} />
+            <span className="text-white">United States</span>
+            <MexicoFlag size={12} />
+            <span className="text-white">Mexico</span>
           </div>
         </div>
       </section>
@@ -699,17 +742,20 @@ export default function Landing() {
           </div>
           <div className="font-mono text-xs text-zinc-500 space-y-1">
             <div className="overline mb-2 text-zinc-600">// jurisdictions</div>
-            <div>🇨🇦 Canada — PIPEDA, Quebec Law 25</div>
-            <div>🇺🇸 United States — CCPA, CPRA, DMCA</div>
-            <div>🇲🇽 México — LFPDPPP</div>
+            <div className="flex items-center gap-2"><CanadaFlag size={10} /> Canada — PIPEDA, Quebec Law 25</div>
+            <div className="flex items-center gap-2"><USFlag size={10} /> United States — CCPA, CPRA, DMCA</div>
+            <div className="flex items-center gap-2"><MexicoFlag size={10} /> Mexico — LFPDPPP</div>
           </div>
           <div className="font-mono text-xs text-zinc-500 md:text-right space-y-2">
             <div className="overline text-zinc-600 mb-2">// contact</div>
             <div>payments@d31337m3.com</div>
             <div>admin@d31337m3.com</div>
             <div className="flex items-center gap-2 md:justify-end mt-4 text-white">
-              <CanadaFlag size={14}/> Made &amp; hosted in Canada · © 2026
+              <CanadaFlag size={14} />
+              <USFlag size={14} />
+              Proudly made in Canada + hosted in the U.S.A · © 2026
             </div>
+            <div className="md:justify-end flex"><SecurityCertifiedBadge /></div>
           </div>
         </div>
       </footer>

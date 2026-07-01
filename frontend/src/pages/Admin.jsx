@@ -216,6 +216,8 @@ export default function Admin() {
     { key: "email", label: "Email", render: r => <span className="text-white">{r.email}</span> },
     { key: "name", label: "Name" },
     { key: "auth_provider", label: "Provider" },
+    { key: "is_employee", label: "Employee", render: r => r.employee_number ? <span className="text-[#00FF41]">YES</span> : "—", csv: r => r.employee_number ? "YES" : "" },
+    { key: "employee_number", label: "Employee #", render: r => r.employee_number || "—" },
     { key: "plan_id", label: "Plan", render: r => r.plan_id?.toUpperCase() || "—" },
     { key: "subscription_status", label: "Sub", render: r => {
         const color = r.subscription_status === "active" ? "#00FF41" : r.subscription_status === "suspended" ? "#FF3333" : "#A1A1AA";
@@ -292,9 +294,9 @@ export default function Admin() {
       { value: "signed", label: "Signed" },
     ]},
     { key: "country", label: "country", options: [
-      { value: "CA", label: "🇨🇦 Canada" },
-      { value: "US", label: "🇺🇸 USA" },
-      { value: "MX", label: "🇲🇽 México" },
+      { value: "CA", label: "Canada" },
+      { value: "US", label: "U.S.A" },
+      { value: "MX", label: "Mexico" },
     ]},
   ];
 
@@ -512,6 +514,43 @@ export default function Admin() {
                     <option value="suspended">Suspended</option><option value="cancelled">Cancelled</option>
                   </select>
                 </div>
+                <div>
+                  <div className="overline mb-1">employee flag</div>
+                  <button
+                    onClick={() => {
+                      if (userDetail.employee_number) {
+                        patchUser(userDetail.id, { employee_number: null });
+                        return;
+                      }
+                      const next = window.prompt("Employee number (example: EMP-1007)", "");
+                      if (!next) return;
+                      patchUser(userDetail.id, { employee_number: next.trim() });
+                    }}
+                    data-testid="ud-toggle-employee"
+                    className="brutal-btn w-full flex items-center gap-2 justify-center"
+                  >
+                    {userDetail.employee_number ? <><ShieldOff size={14}/>Revoke Employee</> : <><ShieldCheck size={14}/>Grant Employee</>}
+                  </button>
+                </div>
+                <div>
+                  <div className="overline mb-1">employee number</div>
+                  <div className="flex gap-2">
+                    <input
+                      data-testid="ud-employee-number"
+                      className="brutal-input"
+                      value={userDetail.employee_number || ""}
+                      onChange={(e) => setUserDetail({ ...userDetail, employee_number: e.target.value })}
+                      placeholder="EMP-1001"
+                    />
+                    <button
+                      data-testid="ud-save-employee-number"
+                      className="brutal-btn"
+                      onClick={() => patchUser(userDetail.id, { employee_number: (userDetail.employee_number || "").trim() || null })}
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -549,6 +588,9 @@ export default function Admin() {
             <Field label="Status" value={documentDetail.status?.toUpperCase()} />
             <Field label="Created" value={documentDetail.created_at} />
             {documentDetail.signed_at && <Field label="Signed" value={`${documentDetail.signed_name} · ${documentDetail.signed_at}`} />}
+            {documentDetail.witness_signed_at && <Field label="Witness Signed" value={`${documentDetail.witness_signed_name || "Witness"} · ${documentDetail.witness_signed_at}`} />}
+            {documentDetail.witness_role && <Field label="Witness Role" value={documentDetail.witness_role} />}
+            {documentDetail.auto_filled_witness && <Field label="Witness Source" value="Auto-filled from admin signature" />}
             {documentDetail.dispatched_to && <Field label="Dispatched To" value={<span className="text-[#00FF41]">{documentDetail.dispatched_to}</span>} />}
             <div className="mt-4 border border-[#222] p-4 bg-black">
               <div className="overline mb-2">// body</div>
@@ -558,6 +600,12 @@ export default function Admin() {
               <div className="mt-3 border border-[#222] p-3">
                 <div className="overline mb-2">// affixed signature</div>
                 <img src={documentDetail.signature_image} alt="sig" className="max-h-20 bg-white p-2 inline-block"/>
+              </div>
+            )}
+            {documentDetail.witness_signature_image && (
+              <div className="mt-3 border border-[#222] p-3">
+                <div className="overline mb-2">// witness signature</div>
+                <img src={documentDetail.witness_signature_image} alt="witness sig" className="max-h-20 bg-white p-2 inline-block"/>
               </div>
             )}
           </div>

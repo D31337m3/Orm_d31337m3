@@ -5,7 +5,7 @@ Contains authentication, user management, and profile endpoints
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Optional
+from typing import Optional, Any, Dict
 import logging
 from sqlalchemy.orm import Session
 import hashlib
@@ -38,8 +38,11 @@ from shared.repositories import (
     AuthChallengeRepository,
     TrustedDeviceRepository,
     AuthAuditRepository,
+    SignatureRepository,
+    DocumentRepository,
 )
-from shared.utils import now_iso, hash_password, verify_password, find_promo_for_code, promo_is_expired, build_promo_code
+from shared.utils import now_iso, hash_password, verify_password, find_promo_for_code, promo_is_expired, build_promo_code, SUPPORTED_COUNTRIES, LEGAL_TEMPLATES, _fill_template
+from shared.database import Finding
 from shared.secrets_manager import get_secret, get_int_secret
 
 # Configure logging
@@ -56,6 +59,9 @@ except Exception as e:
 auth_router = APIRouter()
 user_router = APIRouter()
 profile_router = APIRouter()
+signature_router = APIRouter()
+documents_router = APIRouter()
+meta_router = APIRouter()
 
 # Security schemes
 bearer = HTTPBearer(auto_error=False)
@@ -728,6 +734,34 @@ async def get_user(user_id: str, user: dict = Depends(require_service_auth()), d
         raise HTTPException(status_code=404, detail="User not found")
     return {"user": _serialize_user(user_data)}
 
+
+@user_router.patch("/{user_id}")
+async def patch_user(
+    user_id: str,
+    payload: Dict[str, Any],
+    user: dict = Depends(require_service_auth("orchestrator")),
+    db: Session = Depends(get_db),
+):
+    """Update user record from orchestrator admin endpoints."""
+    editable_fields = {
+        "name",
+        "is_admin",
+        "is_active",
+        "employee_number",
+        "plan_id",
+        "subscription_status",
+    }
+    update_data = {k: payload.get(k) for k in editable_fields if k in payload}
+    if "employee_number" in update_data and isinstance(update_data.get("employee_number"), str):
+        update_data["employee_number"] = update_data["employee_number"].strip() or None
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No supported fields provided")
+
+    updated = UserRepository.update(db, user_id, update_data)
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True, "user": _serialize_user(updated)}
+
 # Profile endpoints
 @profile_router.get("/")
 async def get_profile(user: dict = Depends(verify_user_request), db: Session = Depends(get_db)):
@@ -749,12 +783,9 @@ async def get_profile(user: dict = Depends(verify_user_request), db: Session = D
     return {"profile": profile_data.to_dict()}
 
 @profile_router.put("/")
-async def update_profile_endpoint(payload: ProfileCreate, user: dict = Depends(verify_user_request), db: Session = Depends(get_db)):
+async def update_profile_endpoint(payload: ProfileBase, user: dict = Depends(verify_user_request), db: Session = Depends(get_db)):
     """Update current user's profile"""
-    # Ensure user can only update their own profile
-    if payload.user_id != user["sub"]:
-        raise HTTPException(status_code=403, detail="Can only update own profile")
-    
+
     # Update user name if provided
     if payload.name:
         UserRepository.update(db, user["sub"], {"name": payload.name})
@@ -773,5 +804,176 @@ async def update_profile_endpoint(payload: ProfileCreate, user: dict = Depends(v
     
     updated_profile = ProfileRepository.update(db, user["sub"], update_data)
     if not updated_profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        updated_profile = ProfileRepository.create(db, {"user_id": user["sub"], **update_data})
     return {"profile": updated_profile.to_dict()}
+
+
+@meta_router.get("/countries")
+async def get_countries(user: dict = Depends(verify_user_request)):
+    return {"countries": SUPPORTED_COUNTRIES}
+
+
+@signature_router.get("")
+async def get_signature(user: dict = Depends(verify_user_request), db: Session = Depends(get_db)):
+    rec = SignatureRepository.get_latest_by_user_id(db, user["sub"])
+    return {"signature": rec.to_dict() if rec else None}
+
+
+@signature_router.post("")
+async def upsert_signature(payload: SignatureBase, user: dict = Depends(verify_user_request), db: Session = Depends(get_db)):
+    data_url = (payload.data_url or "").strip()
+    full_name = (payload.full_name or "").strip()
+    if not data_url.startswith("data:image/"):
+        raise HTTPException(status_code=400, detail="Invalid signature image payload")
+    if not full_name:
+        raise HTTPException(status_code=400, detail="full_name is required")
+    rec = SignatureRepository.upsert_for_user(db, user["sub"], data_url, full_name)
+    return {"ok": True, "signature": rec.to_dict()}
+
+
+@documents_router.get("/templates")
+async def get_document_templates(user: dict = Depends(verify_user_request), db: Session = Depends(get_db)):
+    profile_data = ProfileRepository.get_by_user_id(db, user["sub"])
+    country = (profile_data.country if profile_data and profile_data.country else "CA").upper()
+    templates = []
+    for _, tpl in LEGAL_TEMPLATES.items():
+        allowed = tpl.get("jurisdictions") or []
+        templates.append({
+            "id": tpl.get("id"),
+            "title": tpl.get("title"),
+            "summary": tpl.get("summary"),
+            "jurisdictions": allowed,
+            "available": country in allowed,
+        })
+    return {"templates": templates}
+
+
+@documents_router.get("")
+async def list_documents(user: dict = Depends(verify_user_request), db: Session = Depends(get_db)):
+    rows = DocumentRepository.list_by_user_id(db, user["sub"], limit=500)
+    return {"documents": [r.to_dict() for r in rows]}
+
+
+@documents_router.get("/{document_id}")
+async def get_document(document_id: str, user: dict = Depends(verify_user_request), db: Session = Depends(get_db)):
+    rec = DocumentRepository.get_by_id_for_user(db, document_id, user["sub"])
+    if not rec:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {"document": rec.to_dict()}
+
+
+@documents_router.delete("/{document_id}")
+async def delete_document(document_id: str, user: dict = Depends(verify_user_request), db: Session = Depends(get_db)):
+    ok = DocumentRepository.delete_for_user(db, document_id, user["sub"])
+    if not ok:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {"ok": True}
+
+
+@documents_router.post("/generate")
+async def generate_document(payload: DocumentCreate, user: dict = Depends(verify_user_request), db: Session = Depends(get_db)):
+    template = LEGAL_TEMPLATES.get(payload.template_id)
+    if not template:
+        raise HTTPException(status_code=400, detail="Unsupported template_id")
+
+    user_db = UserRepository.get_by_id(db, user["sub"])
+    profile_data = ProfileRepository.get_by_user_id(db, user["sub"])
+
+    country = (profile_data.country if profile_data and profile_data.country else "CA").upper()
+    country_cfg = SUPPORTED_COUNTRIES.get(country) or SUPPORTED_COUNTRIES["CA"]
+    if country not in (template.get("jurisdictions") or []):
+        raise HTTPException(status_code=400, detail="Template is not available for this country")
+
+    finding_url = ""
+    finding_data = ""
+    recipient_broker = (payload.recipient_broker or "").strip()
+    recipient_address = (payload.recipient_address or "").strip()
+    if payload.finding_id:
+        finding = db.query(Finding).filter(Finding.id == payload.finding_id, Finding.user_id == user["sub"]).first()
+        if finding:
+            finding_url = finding.url or ""
+            finding_data = finding.data_found or ""
+            recipient_broker = recipient_broker or finding.broker
+
+    state_val = (profile_data.state if profile_data else "") or ""
+    state_clause = f", {state_val}" if state_val else ""
+
+    body = _fill_template(
+        payload.template_id,
+        {
+            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "recipient_broker": recipient_broker,
+            "recipient_address": recipient_address,
+            "user_name": (profile_data.name if profile_data and profile_data.name else (user_db.name if user_db else "")) or "",
+            "user_email": (user_db.email if user_db else "") or "",
+            "user_address": (profile_data.address if profile_data else "") or "",
+            "user_phone": (profile_data.phone if profile_data else "") or "",
+            "finding_url": finding_url,
+            "finding_data": finding_data,
+            "country_name": country_cfg.get("name", ""),
+            "privacy_law": country_cfg.get("privacy_law", ""),
+            "state_clause": state_clause,
+        },
+    )
+
+    rec = DocumentRepository.create(
+        db,
+        {
+            "user_id": user["sub"],
+            "template_id": payload.template_id,
+            "finding_id": payload.finding_id,
+            "recipient_broker": recipient_broker,
+            "recipient_address": recipient_address,
+            "country": country,
+            "title": template.get("title") or payload.template_id,
+            "body": body,
+        },
+    )
+    return {"ok": True, "document": rec.to_dict()}
+
+
+@documents_router.post("/sign")
+async def sign_document(payload: Dict[str, Any], user: dict = Depends(verify_user_request), db: Session = Depends(get_db)):
+    document_id = str(payload.get("document_id") or "").strip()
+    if not document_id:
+        raise HTTPException(status_code=400, detail="document_id is required")
+
+    signature = SignatureRepository.get_latest_by_user_id(db, user["sub"])
+    if not signature:
+        raise HTTPException(status_code=400, detail="No signature on file")
+
+    witness_signed_at = payload.get("witness_signed_at")
+    witness_signed_at_dt = None
+    if witness_signed_at:
+        try:
+            witness_signed_at_dt = datetime.fromisoformat(str(witness_signed_at).replace("Z", "+00:00"))
+        except Exception:
+            witness_signed_at_dt = datetime.now(timezone.utc)
+
+    rec = DocumentRepository.sign_for_user(
+        db,
+        document_id,
+        user["sub"],
+        {
+            "signed_at": datetime.now(timezone.utc),
+            "signature_image": signature.data_url,
+            "signed_name": signature.full_name,
+            "witness_signature_image": payload.get("witness_signature_image"),
+            "witness_signed_name": payload.get("witness_signed_name"),
+            "witness_role": payload.get("witness_role"),
+            "witness_signed_at": witness_signed_at_dt,
+            "auto_filled_witness": payload.get("auto_filled_witness"),
+        },
+    )
+    if not rec:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return {
+        "ok": True,
+        "document": rec.to_dict(),
+        "dispatch": {
+            "delivered": False,
+            "broker_email": None,
+            "form_url": None,
+        },
+    }

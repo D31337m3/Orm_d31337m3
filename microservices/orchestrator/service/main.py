@@ -30,8 +30,11 @@ from .routes import (
     support_router,
     workforce_router,
     public_router,
+    client_router,
     run_support_state_cleanup,
+    save_runtime_state,
     support_anon_cleanup_interval_seconds,
+    _support_db_path,
 )
 
 # Configure logging
@@ -45,7 +48,7 @@ STARTED_AT = now_iso()
 app = FastAPI(
     title="Orchestrator Service",
     description="Service discovery and lifecycle management for microservices",
-    version="1.0.5"
+    version="1.0.7"
 )
 
 # Add CORS middleware
@@ -64,6 +67,7 @@ app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
 app.include_router(support_router, prefix="/api/support", tags=["support"])
 app.include_router(workforce_router, prefix="/api/workforce", tags=["workforce"])
 app.include_router(public_router, prefix="/api/public", tags=["public"])
+app.include_router(client_router, prefix="/api", tags=["client"])
 
 # Service registry (in production, this would be more sophisticated)
 SERVICE_REGISTRY: Dict[str, dict] = {}
@@ -103,6 +107,7 @@ async def health_check():
         "service": "orchestrator",
         "status": "healthy",
         "version": app.version,
+        "db_path": _support_db_path(),
         "started_at": STARTED_AT,
         "timestamp": now_iso(),
         "registered_services": len(SERVICE_REGISTRY),
@@ -114,7 +119,7 @@ async def health_check():
 async def root():
     return {
         "service": "orchestrator",
-        "version": "1.0.0",
+        "version": app.version,
         "description": "Service discovery and lifecycle management for microservices",
         "endpoints": {
             "health": "/health",
@@ -134,6 +139,7 @@ async def startup_event():
     # Start periodic cleanup for ephemeral anonymous support OTP/session stores.
     _support_cleanup_task = asyncio.create_task(_support_cleanup_loop())
     run_support_state_cleanup()
+    save_runtime_state()
     logger.info("Orchestrator Service started successfully")
 
 # Shutdown event
@@ -148,4 +154,5 @@ async def shutdown_event():
         except asyncio.CancelledError:
             pass
         _support_cleanup_task = None
+    save_runtime_state()
     logger.info("Orchestrator Service shut down successfully")

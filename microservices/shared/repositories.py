@@ -6,7 +6,7 @@ Handles database operations for user authentication and profiles
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 import logging
-from shared.database import User, Profile, Keyword, UserSecurity, AuthChallenge, TrustedDevice, AuthAudit
+from shared.database import User, Profile, Keyword, UserSecurity, AuthChallenge, TrustedDevice, AuthAudit, Signature, Document
 from shared.database_models import generate_id, now_iso
 from datetime import datetime, timezone
 import json
@@ -154,6 +154,136 @@ class ProfileRepository:
         except Exception as e:
             db.rollback()
             logger.error(f"Error updating profile: {e}")
+            raise
+
+
+class SignatureRepository:
+    """Repository for signature capture records."""
+
+    @staticmethod
+    def get_latest_by_user_id(db: Session, user_id: str) -> Signature:
+        return (
+            db.query(Signature)
+            .filter(Signature.user_id == user_id)
+            .order_by(Signature.created_at.desc())
+            .first()
+        )
+
+    @staticmethod
+    def upsert_for_user(db: Session, user_id: str, data_url: str, full_name: str) -> Signature:
+        try:
+            rec = SignatureRepository.get_latest_by_user_id(db, user_id)
+            now = datetime.now(timezone.utc)
+            if rec:
+                rec.data_url = data_url
+                rec.full_name = full_name
+                rec.created_at = now
+            else:
+                rec = Signature(
+                    id=generate_id(),
+                    user_id=user_id,
+                    data_url=data_url,
+                    full_name=full_name,
+                    created_at=now,
+                )
+                db.add(rec)
+            db.commit()
+            db.refresh(rec)
+            return rec
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error upserting signature: {e}")
+            raise
+
+
+class DocumentRepository:
+    """Repository for generated legal documents."""
+
+    @staticmethod
+    def create(db: Session, data: dict) -> Document:
+        try:
+            rec = Document(
+                id=data.get("id") or generate_id(),
+                user_id=data["user_id"],
+                template_id=data["template_id"],
+                finding_id=data.get("finding_id"),
+                recipient_broker=data.get("recipient_broker"),
+                recipient_address=data.get("recipient_address"),
+                country=data.get("country", "CA"),
+                title=data["title"],
+                body=data["body"],
+                status=data.get("status", "draft"),
+                created_at=data.get("created_at") or datetime.now(timezone.utc),
+            )
+            db.add(rec)
+            db.commit()
+            db.refresh(rec)
+            return rec
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error creating document: {e}")
+            raise
+
+    @staticmethod
+    def list_by_user_id(db: Session, user_id: str, limit: int = 200) -> list:
+        return (
+            db.query(Document)
+            .filter(Document.user_id == user_id)
+            .order_by(Document.created_at.desc())
+            .limit(max(1, min(limit, 2000)))
+            .all()
+        )
+
+    @staticmethod
+    def get_by_id_for_user(db: Session, doc_id: str, user_id: str) -> Document:
+        return (
+            db.query(Document)
+            .filter(Document.id == doc_id, Document.user_id == user_id)
+            .first()
+        )
+
+    @staticmethod
+    def delete_for_user(db: Session, doc_id: str, user_id: str) -> bool:
+        try:
+            rec = DocumentRepository.get_by_id_for_user(db, doc_id, user_id)
+            if not rec:
+                return False
+            db.delete(rec)
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error deleting document: {e}")
+            raise
+
+    @staticmethod
+    def sign_for_user(db: Session, doc_id: str, user_id: str, sign_data: dict) -> Document:
+        try:
+            rec = DocumentRepository.get_by_id_for_user(db, doc_id, user_id)
+            if not rec:
+                return None
+            rec.status = "signed"
+            rec.signed_at = sign_data.get("signed_at") or datetime.now(timezone.utc)
+            rec.signature_image = sign_data.get("signature_image")
+            rec.signed_name = sign_data.get("signed_name")
+
+            if sign_data.get("witness_signature_image"):
+                rec.witness_signature_image = sign_data.get("witness_signature_image")
+            if sign_data.get("witness_signed_name"):
+                rec.witness_signed_name = sign_data.get("witness_signed_name")
+            if sign_data.get("witness_role"):
+                rec.witness_role = sign_data.get("witness_role")
+            if sign_data.get("witness_signed_at"):
+                rec.witness_signed_at = sign_data.get("witness_signed_at")
+            if "auto_filled_witness" in sign_data:
+                rec.auto_filled_witness = bool(sign_data.get("auto_filled_witness"))
+
+            db.commit()
+            db.refresh(rec)
+            return rec
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error signing document: {e}")
             raise
 
 

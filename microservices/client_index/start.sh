@@ -12,7 +12,7 @@ export ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-"1440"}
 
 # Database connection - now using SQLAlchemy with SQLite
 # For PostgreSQL production: DATABASE_URL="postgresql://user:password@localhost/d31337m3"
-export DATABASE_URL=${DATABASE_URL:-"sqlite:////tmp/d31337m3_client_index.db"}
+export DATABASE_URL=${DATABASE_URL:-"sqlite:////home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_client_index.db"}
 
 # Infisical secrets manager configuration
 export INFISICAL_SITE_URL=${INFISICAL_SITE_URL:-"https://app.infisical.com"}

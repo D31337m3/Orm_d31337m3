@@ -2,12 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import Dict, Any, Optional, List
 import logging
+import os
+import json
+import tempfile
+import threading
 
 import sys
 sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
 
 from shared.jwt_utils import verify_service_token, verify_user_token, user_has_admin_access
 from shared.database_models import generate_id, now_iso
+from shared.secrets_manager import get_secret
 
 
 workforce_router = APIRouter()
@@ -17,10 +22,64 @@ logger = logging.getLogger("workforce_ops.routes")
 SHIFTS: Dict[str, Dict[str, Any]] = {}
 TIMESHEETS: Dict[str, Dict[str, Any]] = {}
 PAYROLL_RUNS: Dict[str, Dict[str, Any]] = {}
+_state_lock = threading.Lock()
 
 MAX_SHIFTS = 20000
 MAX_TIMESHEETS = 50000
 MAX_PAYROLL_RUNS = 10000
+
+
+def _state_path() -> str:
+    path = get_secret(
+        "WORKFORCE_OPS_STATE_PATH",
+        "/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_workforce_ops_state.json",
+    ) or "/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_workforce_ops_state.json"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    return path
+
+
+def _save_state() -> None:
+    payload = {
+        "shifts": SHIFTS,
+        "timesheets": TIMESHEETS,
+        "payroll_runs": PAYROLL_RUNS,
+        "saved_at": now_iso(),
+    }
+    target = _state_path()
+    fd, tmp = tempfile.mkstemp(prefix="workforce_ops_", suffix=".json", dir=os.path.dirname(target))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=True)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, target)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+
+
+def _load_state() -> None:
+    target = _state_path()
+    if not os.path.exists(target):
+        return
+    try:
+        with open(target, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        SHIFTS.clear()
+        SHIFTS.update(payload.get("shifts") or {})
+        TIMESHEETS.clear()
+        TIMESHEETS.update(payload.get("timesheets") or {})
+        PAYROLL_RUNS.clear()
+        PAYROLL_RUNS.update(payload.get("payroll_runs") or {})
+    except Exception as e:
+        logger.warning(f"workforce_ops state load warning: {e}")
+
+
+with _state_lock:
+    _load_state()
 
 
 def _evict_oldest_dict_entries(store: Dict[str, Dict[str, Any]], max_items: int, sort_key: str = "created_at") -> None:
@@ -30,6 +89,8 @@ def _evict_oldest_dict_entries(store: Dict[str, Dict[str, Any]], max_items: int,
     ordered = sorted(store.items(), key=lambda kv: str(kv[1].get(sort_key, "")))
     for key, _ in ordered[:over]:
         store.pop(key, None)
+    with _state_lock:
+        _save_state()
 
 
 async def verify_staff_or_service(
@@ -91,6 +152,8 @@ async def create_shift(payload: dict, token: dict = Depends(verify_staff_or_serv
         "updated_at": now_iso(),
     }
     SHIFTS[shift_id] = rec
+    with _state_lock:
+        _save_state()
     return {"ok": True, "shift": rec}
 
 
@@ -103,6 +166,8 @@ async def patch_shift(shift_id: str, payload: dict, token: dict = Depends(verify
         if key in payload:
             rec[key] = payload[key]
     rec["updated_at"] = now_iso()
+    with _state_lock:
+        _save_state()
     return {"ok": True, "shift": rec}
 
 
@@ -140,6 +205,8 @@ async def create_timesheet(payload: dict, token: dict = Depends(verify_staff_or_
         "updated_at": now_iso(),
     }
     TIMESHEETS[sheet_id] = rec
+    with _state_lock:
+        _save_state()
     return {"ok": True, "timesheet": rec}
 
 
@@ -171,6 +238,8 @@ async def create_payroll_run(payload: dict, token: dict = Depends(verify_staff_o
         "updated_at": now_iso(),
     }
     PAYROLL_RUNS[run_id] = run
+    with _state_lock:
+        _save_state()
     return {"ok": True, "payroll_run": run}
 
 

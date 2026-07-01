@@ -11,6 +11,8 @@ import time
 import sqlite3
 import json
 import threading
+import os
+import shutil
 import urllib.request
 import urllib.error
 from datetime import datetime, timedelta
@@ -76,7 +78,19 @@ def _health_window_minutes() -> int:
 
 
 def _db_path() -> str:
-    return get_secret("WATCHDOG_DB_PATH", "/tmp/d31337m3_watchdog.db") or "/tmp/d31337m3_watchdog.db"
+    legacy_path = "/tmp/d31337m3_watchdog.db"
+    path = get_secret(
+        "WATCHDOG_DB_PATH",
+        "/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_watchdog.db",
+    ) or "/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_watchdog.db"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if os.path.exists(legacy_path) and not os.path.exists(path):
+        try:
+            shutil.copy2(legacy_path, path)
+            logger.warning(f"Migrated legacy DB from {legacy_path} to {path}")
+        except Exception as e:
+            logger.warning(f"Failed to migrate legacy DB {legacy_path}: {e}")
+    return path
 
 
 def _db_conn() -> sqlite3.Connection:

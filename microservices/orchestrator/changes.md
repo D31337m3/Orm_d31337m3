@@ -1,5 +1,23 @@
 # changes.md — orchestrator
 
+## 1.0.7 (2026-07-01)
+
+### Changed
+- **Gateway hardening for user APIs**: Added resilient compatibility coverage for profile/signature/countries,
+  documents, findings, keywords, reputation, and billing endpoints.
+- **Cleanup migration mode**: Compatibility routes now run upstream-first and automatically fall back on
+  upstream 404/405/501/5xx, preserving reliability while preferring canonical services.
+
+## 1.0.6 (2026-07-01)
+
+### Added
+- **Runtime state persistence snapshots**: Added durable orchestrator runtime state save/load for volatile operational stores
+  (broker contacts, email log, payments, removals, audit log, documents, support/workforce runtime buffers)
+  via atomic JSON snapshots in `microservices/state`.
+
+### Changed
+- **Persistence cadence**: Runtime state now checkpoints from the existing cleanup loop and on startup/shutdown.
+
 ## 1.0.5 (2026-07-01)
 
 ### Added

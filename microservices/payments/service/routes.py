@@ -11,6 +11,8 @@ import logging
 import json
 import sqlite3
 import threading
+import os
+import shutil
 import re
 import hmac
 import hashlib
@@ -47,7 +49,19 @@ MAX_PAYMENTS_IN_MEMORY = get_int_secret("PAYMENTS_MAX_RECORDS", 100000)
 
 
 def _payments_db_path() -> str:
-    return get_secret("PAYMENTS_DB_PATH", "/tmp/d31337m3_payments.db") or "/tmp/d31337m3_payments.db"
+    legacy_path = "/tmp/d31337m3_payments.db"
+    path = get_secret(
+        "PAYMENTS_DB_PATH",
+        "/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_payments.db",
+    ) or "/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_payments.db"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if os.path.exists(legacy_path) and not os.path.exists(path):
+        try:
+            shutil.copy2(legacy_path, path)
+            logger.warning(f"Migrated legacy DB from {legacy_path} to {path}")
+        except Exception as e:
+            logger.warning(f"Failed to migrate legacy DB {legacy_path}: {e}")
+    return path
 
 
 def _admin_email() -> str:
@@ -362,13 +376,18 @@ async def update_user_subscription(user_id: str, plan_id: str, status: str):
 @payment_router.post("/")
 async def process_payment(payload: SubscribeIn, background: BackgroundTasks, request: Request, user: dict = Depends(verify_user_request)):
     """Process a payment for subscription"""
+    user_id = user.get("id") or user.get("sub")
+    user_email = user.get("email")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid user token")
+
     # Get the plan details
     plan = PLANS[payload.plan_id]
     
     # Create payment record
     payment_data = {
         "id": generate_id(),
-        "user_id": user["id"],
+        "user_id": user_id,
         "plan_id": plan["id"],
         "amount_usd": plan["price_usd"],
         "method": payload.payment_method,
@@ -382,13 +401,13 @@ async def process_payment(payload: SubscribeIn, background: BackgroundTasks, req
             "recipient_email": PAYMENTS_EMAIL,
             "amount_usd": plan["price_usd"],
             "amount_cad_estimate": round(plan["price_usd"] * 1.37, 2),
-            "note": f"d31337m3 {plan['name']} - {user['email']}",
+            "note": f"d31337m3 {plan['name']} - {user_email or user_id}",
             "auto_deposit": True,
             "security_question_required": False,
             "instructions": (
                 f"1. From your bank's Interac e-Transfer screen, send to {PAYMENTS_EMAIL}\n"
                 f"2. Amount: ${plan['price_usd']} USD (≈ ${round(plan['price_usd'] * 1.37, 2)} CAD)\n"
-                f"3. Add the message: d31337m3 {plan['name']} - {user['email']}\n"
+                    f"3. Add the message: d31337m3 {plan['name']} - {user_email or user_id}\n"
                 f"4. No security question needed — recipient is set up for AUTO-DEPOSIT.\n"
                 f"5. Admin will confirm within 24 hours and unlock your subscription.\n"
             ),
@@ -402,10 +421,10 @@ async def process_payment(payload: SubscribeIn, background: BackgroundTasks, req
         background.add_task(
             send_email_mock,
             PAYMENTS_EMAIL,
-            f"[d31337m3] Interac payment expected — {user['email']}",
-            f"User {user['email']} initiated {plan['name']} (${plan['price_usd']}) via Interac e-Transfer (auto-deposit).\n"
+            f"[d31337m3] Interac payment expected — {user_email or user_id}",
+            f"User {user_email or user_id} initiated {plan['name']} (${plan['price_usd']}) via Interac e-Transfer (auto-deposit).\n"
             f"Payment ID: {created_payment['id']}\n"
-            f"Expected note: d31337m3 {plan['name']} - {user['email']}\n\n"
+            f"Expected note: d31337m3 {plan['name']} - {user_email or user_id}\n\n"
             f"Confirm via admin panel once funds arrive.\n"
         )
         
@@ -422,7 +441,7 @@ async def process_payment(payload: SubscribeIn, background: BackgroundTasks, req
                 "wallet": CRYPTO_WALLET,
                 "networks": ["ethereum", "polygon", "base"],
                 "amount_usdc": plan["price_usd"],
-                "memo": f"d31337m3-{user['id'][:8]}",
+                "memo": f"d31337m3-{str(user_id)[:8]}",
             }
             payment_data["status"] = "awaiting_tx_hash"
             
@@ -440,7 +459,7 @@ async def process_payment(payload: SubscribeIn, background: BackgroundTasks, req
             raise HTTPException(status_code=400, detail="Invalid transaction hash format")
 
         existing_tx = _find_payment_by_tx_hash(payload.tx_hash)
-        if existing_tx and existing_tx.get("user_id") != user["id"]:
+        if existing_tx and existing_tx.get("user_id") != user_id:
             raise HTTPException(status_code=409, detail="Transaction hash already used")
 
         verification = await verify_usdc_tx(payload.network, payload.tx_hash, plan["price_usd"])
@@ -459,7 +478,7 @@ async def process_payment(payload: SubscribeIn, background: BackgroundTasks, req
             
             # Update user's subscription
             await update_user_subscription(
-                user["id"], 
+                user_id,
                 plan["id"], 
                 "active"
             )
@@ -467,7 +486,7 @@ async def process_payment(payload: SubscribeIn, background: BackgroundTasks, req
             # Send confirmation email
             background.add_task(
                 send_email_mock,
-                user["email"],
+                user_email or "",
                 f"[d31337m3] Payment confirmed — {plan['name']}",
                 f"Your USDC payment of ${plan['price_usd']} on {payload.network} has been confirmed.\n"
                 f"Tx: {payload.tx_hash}\n\n— d31337m3\n"
@@ -488,7 +507,7 @@ async def process_payment(payload: SubscribeIn, background: BackgroundTasks, req
             background.add_task(
                 send_email_mock,
                 _admin_email(),
-                f"[d31337m3] Crypto payment needs manual review — {user['email']}",
+                f"[d31337m3] Crypto payment needs manual review — {user_email or user_id}",
                 f"Tx hash {payload.tx_hash} on {payload.network} could not be auto-verified for ${plan['price_usd']}. "
                 f"Please review in admin panel.\n"
             )
@@ -537,18 +556,24 @@ async def process_payment(payload: SubscribeIn, background: BackgroundTasks, req
 @payment_router.get("/")
 async def list_user_payments(user: dict = Depends(verify_user_request)):
     """List payments for the current user"""
-    payments = await get_payments_by_user_id(user["id"])
+    user_id = user.get("id") or user.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid user token")
+    payments = await get_payments_by_user_id(user_id)
     return {"payments": payments}
 
 @payment_router.get("/{payment_id}")
 async def get_payment(payment_id: str, user: dict = Depends(verify_user_request)):
     """Get a specific payment by ID"""
+    user_id = user.get("id") or user.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid user token")
     payment = await get_payment_by_id(payment_id)
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     
     # Ensure user can only access their own payments
-    if payment["user_id"] != user["id"]:
+    if payment["user_id"] != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
     return {"payment": payment}
@@ -557,7 +582,10 @@ async def get_payment(payment_id: str, user: dict = Depends(verify_user_request)
 @subscription_router.get("/")
 async def get_user_subscription(user: dict = Depends(verify_user_request)):
     """Get current user's subscription"""
-    subscription = await get_user_plan(user["id"])
+    user_id = user.get("id") or user.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid user token")
+    subscription = await get_user_plan(user_id)
     if not subscription:
         return {
             "subscription": {

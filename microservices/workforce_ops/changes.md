@@ -1,5 +1,18 @@
 # changes.md — workforce_ops
 
+## 1.0.7 (2026-07-01)
+
+### Changed
+- Release alignment bump for coordinated production rollout and service version parity.
+
+## 1.0.6 (2026-07-01)
+
+### Added
+- **Persistent in-memory store snapshots**: Added atomic JSON state save/load for shifts, timesheets, and payroll runs.
+
+### Changed
+- **Write durability**: Create/update/eviction paths now checkpoint state so workforce data survives restarts/reboots.
+
 ## 1.0.5 (2026-07-01)
 
 ### Changed

@@ -1,5 +1,10 @@
 # changes.md — auditor
 
+## 1.0.4 (2026-07-01)
+
+### Changed
+- Release alignment bump for coordinated production rollout and service version parity.
+
 ## 1.0.3 (2026-07-01)
 
 ### Changed

@@ -2,12 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import Dict, Any, Optional, List
 import logging
+import os
+import json
+import tempfile
+import threading
 
 import sys
 sys.path.append('/home/D31337m3/Orm_d31337m3/microservices/shared')
 
 from shared.jwt_utils import verify_service_token, verify_user_token, user_has_admin_access
 from shared.database_models import generate_id, now_iso
+from shared.secrets_manager import get_secret
 
 
 support_router = APIRouter()
@@ -17,12 +22,66 @@ logger = logging.getLogger("support_hub.routes")
 CHAT_SESSIONS: Dict[str, Dict[str, Any]] = {}
 CHAT_MESSAGES: Dict[str, List[Dict[str, Any]]] = {}
 TICKETS: Dict[str, Dict[str, Any]] = {}
+_state_lock = threading.Lock()
 
 MAX_CHAT_SESSIONS = 5000
 MAX_MESSAGES_PER_CHAT = 1000
 MAX_TICKETS = 10000
 MAX_MESSAGE_LENGTH = 2000
 MAX_TITLE_LENGTH = 200
+
+
+def _state_path() -> str:
+    path = get_secret(
+        "SUPPORT_HUB_STATE_PATH",
+        "/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_support_hub_state.json",
+    ) or "/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_support_hub_state.json"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    return path
+
+
+def _save_state() -> None:
+    payload = {
+        "chat_sessions": CHAT_SESSIONS,
+        "chat_messages": CHAT_MESSAGES,
+        "tickets": TICKETS,
+        "saved_at": now_iso(),
+    }
+    target = _state_path()
+    fd, tmp = tempfile.mkstemp(prefix="support_hub_", suffix=".json", dir=os.path.dirname(target))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=True)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, target)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+
+
+def _load_state() -> None:
+    target = _state_path()
+    if not os.path.exists(target):
+        return
+    try:
+        with open(target, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        CHAT_SESSIONS.clear()
+        CHAT_SESSIONS.update(payload.get("chat_sessions") or {})
+        CHAT_MESSAGES.clear()
+        CHAT_MESSAGES.update(payload.get("chat_messages") or {})
+        TICKETS.clear()
+        TICKETS.update(payload.get("tickets") or {})
+    except Exception as e:
+        logger.warning(f"support_hub state load warning: {e}")
+
+
+with _state_lock:
+    _load_state()
 
 
 def _evict_oldest_dict_entries(store: Dict[str, Dict[str, Any]], max_items: int, sort_key: str = "created_at") -> None:
@@ -34,6 +93,8 @@ def _evict_oldest_dict_entries(store: Dict[str, Dict[str, Any]], max_items: int,
         store.pop(key, None)
         if store is CHAT_SESSIONS:
             CHAT_MESSAGES.pop(key, None)
+    with _state_lock:
+        _save_state()
 
 
 def _append_message(chat_id: str, message: Dict[str, Any]) -> None:
@@ -99,6 +160,8 @@ async def create_chat(payload: dict, token: dict = Depends(verify_staff_or_servi
     }
     CHAT_SESSIONS[chat_id] = rec
     CHAT_MESSAGES[chat_id] = []
+    with _state_lock:
+        _save_state()
     return {"ok": True, "chat": rec}
 
 
@@ -129,6 +192,8 @@ async def post_message(chat_id: str, payload: dict, token: dict = Depends(verify
     }
     _append_message(chat_id, msg)
     CHAT_SESSIONS[chat_id]["updated_at"] = now_iso()
+    with _state_lock:
+        _save_state()
     return {"ok": True, "message": msg}
 
 
@@ -161,6 +226,8 @@ async def create_ticket(payload: dict, token: dict = Depends(verify_staff_or_ser
         "updated_at": now_iso(),
     }
     TICKETS[ticket_id] = rec
+    with _state_lock:
+        _save_state()
     return {"ok": True, "ticket": rec}
 
 
@@ -174,4 +241,6 @@ async def patch_ticket(ticket_id: str, payload: dict, token: dict = Depends(veri
         if key in payload:
             rec[key] = payload[key]
     rec["updated_at"] = now_iso()
+    with _state_lock:
+        _save_state()
     return {"ok": True, "ticket": rec}

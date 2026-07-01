@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import PageBrandBanner from "@/components/PageBrandBanner";
-import SignaturePad from "@/components/SignaturePad";
 import api from "@/lib/api";
 import { motion } from "framer-motion";
-import { FileText, Download, Trash2, PenLine, FileSignature, Eye } from "lucide-react";
+import { FileText, Download, Trash2, FileSignature, Eye } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useAuth } from "@/lib/auth";
 
 const TEMPLATE_ICONS = {
   dmca_takedown: "⚖",
@@ -13,35 +14,93 @@ const TEMPLATE_ICONS = {
   right_to_be_forgotten: "🌐",
 };
 
+const PREPOPULATED_TEMPLATES = [
+  {
+    id: "dmca_takedown",
+    title: "DMCA Takedown Notice",
+    summary: "Formal copyright takedown demand under the U.S. Digital Millennium Copyright Act.",
+    jurisdictions: ["US"],
+    available: true,
+  },
+  {
+    id: "cease_and_desist",
+    title: "Cease & Desist Letter",
+    summary: "Formal demand to stop publication, distribution, or sale of personal data.",
+    jurisdictions: ["US", "CA", "MX"],
+    available: true,
+  },
+  {
+    id: "privacy_removal_request",
+    title: "Privacy Removal Request",
+    summary: "Jurisdiction-aware data deletion request under applicable privacy laws.",
+    jurisdictions: ["US", "CA", "MX"],
+    available: true,
+  },
+  {
+    id: "right_to_be_forgotten",
+    title: "Right to be Forgotten - Search Engine De-indexing",
+    summary: "Request to search engines to de-index URLs surfacing personal data.",
+    jurisdictions: ["US", "CA", "MX"],
+    available: true,
+  },
+];
+
+function mergeTemplates(apiTemplates) {
+  const incoming = Array.isArray(apiTemplates) ? apiTemplates : [];
+  const byId = new Map(incoming.filter((t) => t?.id).map((t) => [t.id, t]));
+
+  const merged = PREPOPULATED_TEMPLATES.map((seed) => {
+    const api = byId.get(seed.id) || {};
+    return {
+      ...seed,
+      ...api,
+      jurisdictions: Array.isArray(api.jurisdictions) && api.jurisdictions.length ? api.jurisdictions : seed.jurisdictions,
+      available: typeof api.available === "boolean" ? api.available : seed.available,
+    };
+  });
+
+  for (const t of incoming) {
+    if (t?.id && !merged.some((m) => m.id === t.id)) merged.push(t);
+  }
+
+  return merged;
+}
+
 export default function Documents() {
+  const { user: me } = useAuth();
   const [tab, setTab] = useState("documents");
   const [templates, setTemplates] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [findings, setFindings] = useState([]);
   const [signature, setSignature] = useState(null);
-  const [sigName, setSigName] = useState("");
-  const [profile, setProfile] = useState({ country: "CA", state: "ON", address: "", phone: "", name: "" });
-  const [countries, setCountries] = useState({});
   const [viewing, setViewing] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [genForm, setGenForm] = useState({ template_id: "", finding_id: "", recipient_broker: "", recipient_address: "" });
 
+  const buildWitnessSignaturePayloadIfNeeded = () => {
+    if (!me?.is_admin || !signature?.data_url) return {};
+    return {
+      witness_signed_name: signature.full_name || me?.name || me?.email || "Admin Witness",
+      witness_signature_image: signature.data_url,
+      witness_signed_at: new Date().toISOString(),
+      witness_role: "admin_witness",
+      auto_filled_witness: true,
+    };
+  };
+
   const load = async () => {
-    const [t, d, f, s, p, c] = await Promise.all([
+    const [t, d, f, s] = await Promise.allSettled([
       api.get("/documents/templates"),
       api.get("/documents"),
       api.get("/findings"),
       api.get("/signature"),
-      api.get("/profile"),
-      api.get("/countries"),
     ]);
-    setTemplates(t.data.templates);
-    setDocuments(d.data.documents);
-    setFindings(f.data.findings);
-    setSignature(s.data.signature);
-    setProfile(p.data.profile);
-    setCountries(c.data.countries);
-    setSigName(s.data.signature?.full_name || p.data.profile?.name || "");
+
+    const apiTemplates = t.status === "fulfilled" ? t.value?.data?.templates : [];
+    setTemplates(mergeTemplates(apiTemplates));
+    setDocuments(d.status === "fulfilled" ? (d.value?.data?.documents || []) : []);
+    setFindings(f.status === "fulfilled" ? (f.value?.data?.findings || []) : []);
+    setSignature(s.status === "fulfilled" ? (s.value?.data?.signature || null) : null);
   };
   useEffect(() => { load(); }, []);
 
@@ -58,18 +117,6 @@ export default function Documents() {
     }
   }, []);
 
-  const saveSignature = async (dataUrl) => {
-    await api.post("/signature", { data_url: dataUrl, full_name: sigName });
-    load();
-    setTab("documents");
-  };
-
-  const saveProfile = async () => {
-    await api.put("/profile", profile);
-    alert("Profile updated.");
-    load();
-  };
-
   const generate = async () => {
     if (!genForm.template_id) return;
     setGenerating(true);
@@ -84,7 +131,10 @@ export default function Documents() {
 
   const sign = async (id) => {
     try {
-      const r = await api.post("/documents/sign", { document_id: id });
+      const r = await api.post("/documents/sign", {
+        document_id: id,
+        ...buildWitnessSignaturePayloadIfNeeded(),
+      });
       const fresh = await api.get(`/documents/${id}`);
       setViewing(fresh.data.document);
       load();
@@ -127,7 +177,7 @@ export default function Documents() {
   };
 
   return (
-    <DashboardLayout title="Legal Documents — North America 🇨🇦 🇺🇸 🇲🇽">
+    <DashboardLayout title="Legal Documents — North America">
       <PageBrandBanner title="documents" description="Purple-branded legal workflow for notices, signatures, and exports." />
       <div className="brutal-card p-4 mb-6 border-[#A855F7]/40 bg-[#120f1f]/30">
         <div className="font-mono text-xs text-zinc-300">
@@ -140,7 +190,7 @@ export default function Documents() {
       </div>
 
       <div className="flex gap-2 mb-6" data-testid="docs-tabs">
-        {[["documents","My Documents"],["generate","Generate New"],["signature","E-Signature"],["profile","Profile"]].map(([k,l]) => (
+        {[["documents","My Documents"],["generate","Generate New"]].map(([k,l]) => (
           <button key={k} onClick={()=>setTab(k)} data-testid={`docs-tab-${k}`}
             className={`font-mono text-xs px-4 py-2 border ${tab===k ? "border-white text-white" : "border-[#222] text-zinc-500 hover:text-white"}`}>
             {l.toUpperCase()}
@@ -197,8 +247,7 @@ export default function Documents() {
                   onClick={() => t.available && setGenForm({...genForm, template_id: t.id})}
                   disabled={!t.available}
                   data-testid={`template-${t.id}`}
-                  className={`w-full text-left border p-4 transition-all ${genForm.template_id===t.id ? "border-[#FF3333] bg-[#1a0808]" : t.available ? "border-[#222] hover:border-white" : "border-[#222] opacity-40 cursor-not-allowed"}`}
-                                  className={`w-full text-left border p-4 transition-all ${genForm.template_id===t.id ? "border-[#A855F7] bg-[#120f1f]" : t.available ? "border-[#222] hover:border-white" : "border-[#222] opacity-40 cursor-not-allowed"}`}
+                  className={`w-full text-left border p-4 transition-all ${genForm.template_id===t.id ? "border-[#A855F7] bg-[#120f1f]" : t.available ? "border-[#222] hover:border-white" : "border-[#222] opacity-40 cursor-not-allowed"}`}
                 >
                   <div className="font-display font-bold text-lg flex items-center gap-2">
                     <span className="text-2xl">{TEMPLATE_ICONS[t.id]}</span>{t.title}
@@ -206,8 +255,7 @@ export default function Documents() {
                   <div className="font-mono text-xs text-zinc-400 mt-1">{t.summary}</div>
                   <div className="font-mono text-[10px] tracking-widest text-zinc-500 mt-2">
                     JURISDICTIONS: {t.jurisdictions.join(" · ")}
-                    {!t.available && <span className="text-[#FF3333]"> · NOT AVAILABLE FOR YOUR COUNTRY</span>}
-                                      {!t.available && <span className="text-[#A855F7]"> · NOT AVAILABLE FOR YOUR COUNTRY</span>}
+                    {!t.available && <span className="text-[#A855F7]"> · NOT AVAILABLE FOR YOUR COUNTRY</span>}
                   </div>
                 </motion.button>
               ))}
@@ -238,53 +286,10 @@ export default function Documents() {
                 <FileText size={14}/>{generating ? "Generating..." : "Generate Document"}
               </button>
               {!signature && (
-                <div className="font-mono text-xs text-[#FFD700] mt-2">⚠ Heads up: you&apos;ll need an e-signature on file to sign generated documents. <button onClick={()=>setTab("signature")} className="underline">Set one up →</button></div>
+                <div className="font-mono text-xs text-[#FFD700] mt-2">⚠ Heads up: you&apos;ll need an e-signature on file to sign generated documents. <Link to="/profile-signature" className="underline">Set one up →</Link></div>
               )}
             </div>
           </div>
-        </div>
-      )}
-
-      {tab === "signature" && (
-        <div className="space-y-6">
-          <SignaturePad onSave={saveSignature} fullName={sigName} setFullName={setSigName} existing={signature} />
-        </div>
-      )}
-
-      {tab === "profile" && (
-        <div className="brutal-card p-6 max-w-2xl" data-testid="profile-panel">
-          <div className="overline mb-4">// personal info (used in legal documents)</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <div className="overline mb-1">full legal name</div>
-              <input data-testid="profile-name" value={profile.name || ""} onChange={(e)=>setProfile({...profile, name: e.target.value})} className="brutal-input" />
-            </div>
-            <div>
-              <div className="overline mb-1">phone</div>
-              <input data-testid="profile-phone" value={profile.phone || ""} onChange={(e)=>setProfile({...profile, phone: e.target.value})} className="brutal-input" />
-            </div>
-            <div className="md:col-span-2">
-              <div className="overline mb-1">street address</div>
-              <input data-testid="profile-address" value={profile.address || ""} onChange={(e)=>setProfile({...profile, address: e.target.value})} className="brutal-input" />
-            </div>
-            <div>
-              <div className="overline mb-1">country</div>
-              <select data-testid="profile-country" value={profile.country || "CA"} onChange={(e)=>setProfile({...profile, country: e.target.value, state: ""})} className="brutal-input">
-                {Object.entries(countries).map(([code, c]) => <option key={code} value={code}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <div className="overline mb-1">state / province</div>
-              <select data-testid="profile-state" value={profile.state || ""} onChange={(e)=>setProfile({...profile, state: e.target.value})} className="brutal-input">
-                <option value="">—</option>
-                {(countries[profile.country]?.states || []).map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="mt-3 font-mono text-xs text-zinc-500">
-            Privacy law applicable to your jurisdiction: <span className="text-white">{countries[profile.country]?.privacy_law}</span>
-          </div>
-          <button onClick={saveProfile} data-testid="profile-save" className="brutal-btn brutal-btn-primary mt-5 flex items-center gap-2"><PenLine size={14}/>Save Profile</button>
         </div>
       )}
 
@@ -306,6 +311,13 @@ export default function Documents() {
                 <div className="overline mb-2">// affixed signature</div>
                 <img src={viewing.signature_image} alt="signature" className="max-h-20 bg-white p-2 inline-block" />
                 <div className="font-mono text-xs text-zinc-500 mt-2">› {viewing.signed_name} · {viewing.signed_at?.slice(0,16)}</div>
+              </div>
+            )}
+            {viewing.witness_signature_image && (
+              <div className="border border-[#222] p-3 bg-[#0a0a0a] mt-3">
+                <div className="overline mb-2">// witness signature</div>
+                <img src={viewing.witness_signature_image} alt="witness signature" className="max-h-20 bg-white p-2 inline-block" />
+                <div className="font-mono text-xs text-zinc-500 mt-2">› {viewing.witness_signed_name || "Witness"} · {viewing.witness_signed_at?.slice(0,16)}</div>
               </div>
             )}
             <div className="flex gap-3 mt-5">

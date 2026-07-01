@@ -5,6 +5,7 @@ export default function SignaturePad({ onSave, fullName, setFullName, existing }
   const canvasRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
   const [hasSig, setHasSig] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const c = canvasRef.current;
@@ -17,6 +18,10 @@ export default function SignaturePad({ onSave, fullName, setFullName, existing }
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
   }, []);
+
+  useEffect(() => {
+    if (existing?.data_url) setHasSig(true);
+  }, [existing]);
 
   const getPos = (e) => {
     const c = canvasRef.current;
@@ -54,17 +59,26 @@ export default function SignaturePad({ onSave, fullName, setFullName, existing }
     setHasSig(false);
   };
 
-  const save = () => {
+  const save = async () => {
     if (!fullName || !fullName.trim()) {
       alert("Please type your full legal name first.");
       return;
     }
-    if (!hasSig) {
+    if (!hasSig && !existing?.data_url) {
       alert("Please draw your signature on the canvas.");
       return;
     }
-    const dataUrl = canvasRef.current.toDataURL("image/png");
-    onSave(dataUrl);
+
+    try {
+      setSaving(true);
+      const dataUrl = hasSig ? canvasRef.current.toDataURL("image/png") : existing?.data_url;
+      await onSave(dataUrl);
+      alert("Signature saved.");
+    } catch (e) {
+      alert(e?.response?.data?.detail || e?.message || "Failed to save signature.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -106,8 +120,8 @@ export default function SignaturePad({ onSave, fullName, setFullName, existing }
         style={{ background: "#0a0a0a" }}
       />
       <div className="flex gap-3 mt-4">
-        <button onClick={clear} data-testid="signature-clear" className="brutal-btn flex items-center gap-2"><Eraser size={14}/>Clear</button>
-        <button onClick={save} data-testid="signature-save" className="brutal-btn brutal-btn-primary flex items-center gap-2"><Save size={14}/>Save Signature</button>
+        <button onClick={clear} disabled={saving} data-testid="signature-clear" className="brutal-btn flex items-center gap-2"><Eraser size={14}/>Clear</button>
+        <button onClick={save} disabled={saving} data-testid="signature-save" className="brutal-btn brutal-btn-primary flex items-center gap-2"><Save size={14}/>{saving ? "Saving..." : "Save Signature"}</button>
       </div>
     </div>
   );

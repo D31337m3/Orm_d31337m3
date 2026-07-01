@@ -21,7 +21,7 @@ from shared.secrets_manager import init_infisical, get_cors_allowed_origins
 init_infisical()
 
 # Import local routers
-from .routes import audit_router, compliance_router
+from .routes import audit_router, compliance_router, _db_path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -34,7 +34,7 @@ STARTED_AT = now_iso()
 app = FastAPI(
     title="Auditor Service",
     description="Audit trail recording and compliance reporting service",
-    version="1.0.3"
+    version="1.0.4"
 )
 
 # Add CORS middleware
@@ -57,6 +57,7 @@ async def health_check():
         "service": "auditor",
         "status": "healthy",
         "version": app.version,
+        "db_path": _db_path(),
         "started_at": STARTED_AT,
         "timestamp": now_iso()
     }

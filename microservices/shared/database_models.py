@@ -159,6 +159,11 @@ class DocumentInDB(DocumentBase):
     signed_at: Optional[str] = None
     signature_image: Optional[str] = None
     signed_name: Optional[str] = None
+    witness_signed_at: Optional[str] = None
+    witness_signature_image: Optional[str] = None
+    witness_signed_name: Optional[str] = None
+    witness_role: Optional[str] = None
+    auto_filled_witness: Optional[bool] = None
     created_at: str
     dispatched_to: Optional[str] = None
     dispatched_at: Optional[str] = None

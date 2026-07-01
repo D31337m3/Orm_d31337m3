@@ -95,11 +95,11 @@ This setup follows the startup order in:
 - Secrets are loaded Infisical-first via `shared/secrets_manager.py`, with environment variables as fallback.
 - Set `INFISICAL_PROJECT_ID`, `INFISICAL_ENVIRONMENT`, and either `INFISICAL_SERVICE_TOKEN` or `INFISICAL_CLIENT_ID` + `INFISICAL_CLIENT_SECRET` on each service.
 - Local persistence defaults (override via env/Infisical keys):
-	- Orchestrator support DB: `ORCHESTRATOR_SUPPORT_DB_PATH` (default `/tmp/d31337m3_orchestrator_support.db`)
-	- Payments DB: `PAYMENTS_DB_PATH` (default `/tmp/d31337m3_payments.db`)
-	- Data handling DB: `DATA_HANDLING_DB_PATH` (default `/tmp/d31337m3_data_handling.db`)
-	- Watchdog DB: `WATCHDOG_DB_PATH` (default `/tmp/d31337m3_watchdog.db`)
-	- Auditor DB: `AUDITOR_DB_PATH` (default `/tmp/d31337m3_auditor.db`)
+	- Orchestrator support DB: `ORCHESTRATOR_SUPPORT_DB_PATH` (default `/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_orchestrator_support.db`)
+	- Payments DB: `PAYMENTS_DB_PATH` (default `/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_payments.db`)
+	- Data handling DB: `DATA_HANDLING_DB_PATH` (default `/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_data_handling.db`)
+	- Watchdog DB: `WATCHDOG_DB_PATH` (default `/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_watchdog.db`)
+	- Auditor DB: `AUDITOR_DB_PATH` (default `/home/D31337m3/Orm_d31337m3/microservices/state/d31337m3_auditor.db`)
 - Watchdog live probing can be configured with:
 	- `WATCHDOG_SERVICE_URLS` as JSON map, for example `{"client_index":"http://127.0.0.1:8002"}`
 	- `WATCHDOG_HEALTH_TIMEOUT_SECONDS` probe timeout

@@ -44,11 +44,30 @@ export default function SecurityCenter() {
   const [sent, setSent] = useState(false);
   const [changelogs, setChangelogs] = useState(null);
   const [activeService, setActiveService] = useState(null);
+  const [loadingChangelogs, setLoadingChangelogs] = useState(true);
+  const [changelogError, setChangelogError] = useState("");
+
+  const loadChangelogs = async () => {
+    setLoadingChangelogs(true);
+    setChangelogError("");
+    try {
+      const res = await api.get("/public/changelogs");
+      const logs = res?.data?.changelogs || {};
+      setChangelogs(logs);
+      const first = Object.keys(logs).sort()[0] || null;
+      setActiveService((prev) => prev || first);
+      if (!first) {
+        setChangelogError("No changelog files were returned by the public API.");
+      }
+    } catch {
+      setChangelogError("Unable to load live changelog feed. Please retry.");
+    } finally {
+      setLoadingChangelogs(false);
+    }
+  };
 
   useEffect(() => {
-    api.get("/api/public/changelogs")
-      .then((res) => setChangelogs(res.data.changelogs))
-      .catch(() => {});
+    loadChangelogs();
   }, []);
 
   const canSubmit = useMemo(() => {
@@ -75,10 +94,14 @@ export default function SecurityCenter() {
 
         <section className="brutal-card p-8 mb-6 border border-[#FF3333]/50">
           <div className="overline text-[#FF3333] mb-2">// security center</div>
-          <h1 className="font-display font-black text-4xl mb-4">Report Security Breaches, Trust Voids, and Bugs</h1>
+          <h1 className="font-display font-black text-4xl mb-4">Security Operations and Responsible Disclosure</h1>
           <p className="font-mono text-zinc-300 leading-relaxed">
-            D31337m3.com (pronounced <span className="text-white">delete me dot com</span>) is in active security-first refactor.
-            Thank you for your patience while we harden and evolve this vision for privacy and reputation management.
+            D31337m3.com (pronounced <span className="text-white">delete me dot com</span>) is built around user-data protection first.
+            This page is the public gateway for responsible disclosure, trust incident reporting, and transparent security change auditing.
+          </p>
+          <p className="font-mono text-zinc-400 leading-relaxed mt-3 text-sm">
+            We protect customer data using layered controls: authenticated sessions, isolated secrets, least-privilege service access,
+            and redacted public telemetry so sensitive operational details are not exposed.
           </p>
           <div className="mt-4 font-mono text-sm text-zinc-300">
             Security inbox: <a className="text-white hover:text-[#FF3333]" href="mailto:security@d31337m3.com">security@d31337m3.com</a>
@@ -94,20 +117,20 @@ export default function SecurityCenter() {
             <ShieldAlert className="text-[#FF3333] mb-2" size={18} />
             <div className="font-display font-black text-xl mb-2">Security Measures In Place</div>
             <ul className="font-mono text-xs text-zinc-400 space-y-1">
-              <li>JWT auth and verification middleware</li>
-              <li>Infisical-first secrets strategy</li>
-              <li>Public telemetry redaction controls</li>
-              <li>Service isolation and operational health gates</li>
+              <li>JWT auth with service and user-token verification</li>
+              <li>Infisical-first secret lifecycle and key isolation</li>
+              <li>Public telemetry redaction with least-privilege exposure</li>
+              <li>Service-level health gates, rollback hooks, and runtime checks</li>
             </ul>
           </div>
           <div className="brutal-card p-5">
             <Bug className="text-[#FFD700] mb-2" size={18} />
             <div className="font-display font-black text-xl mb-2">What To Report</div>
             <ul className="font-mono text-xs text-zinc-400 space-y-1">
-              <li>Security breaches</li>
-              <li>Trust voidances</li>
-              <li>Broken flows / logic abuse</li>
-              <li>Known and past patched exploit regressions</li>
+              <li>Security breaches or unauthorized access paths</li>
+              <li>Trust voidances and unsafe platform behavior</li>
+              <li>Broken user flows and logic abuse vectors</li>
+              <li>Regression of known or previously patched exploits</li>
             </ul>
           </div>
           <div className="brutal-card p-5">
@@ -223,7 +246,7 @@ export default function SecurityCenter() {
 
         <section className="brutal-card p-8 mt-6">
           <div className="overline mb-2">// changelogs</div>
-          <h2 className="font-display font-black text-2xl mb-2">Microservice Changelog Audit</h2>
+          <h2 className="font-display font-black text-2xl mb-2">Live Microservice Changelog Audit</h2>
           <p className="font-mono text-xs text-zinc-400 mb-6">
             Public changelog for all microservices powering the d31337m3 platform.
             Select a service to view its version history.
@@ -243,8 +266,20 @@ export default function SecurityCenter() {
                 {svc}
               </button>
             ))}
-            {!changelogs && (
+            {loadingChangelogs && (
               <span className="font-mono text-xs text-zinc-600">loading...</span>
+            )}
+            {!loadingChangelogs && changelogError && (
+              <span className="font-mono text-xs text-[#FF3333]">{changelogError}</span>
+            )}
+            {!loadingChangelogs && changelogError && (
+              <button
+                type="button"
+                onClick={loadChangelogs}
+                className="font-mono text-xs px-3 py-1.5 border border-zinc-600 text-zinc-200 hover:border-zinc-400"
+              >
+                retry
+              </button>
             )}
           </div>
 
