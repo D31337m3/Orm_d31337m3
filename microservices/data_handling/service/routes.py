@@ -503,11 +503,40 @@ async def scan_and_notify(user_id: str, user_email: str, keyword_ids: Optional[l
         )
         await send_email_mock(user_email, f"[d31337m3] {new_count} new findings detected", body)
 
+    def _send_email_via_azure(to: str, subject: str, body: str) -> bool:
+        connection_string = get_secret("AZURE_COMM_EMAIL_CONNECTION_STRING")
+        if not connection_string:
+            return False
+
+        try:
+            from azure.communication.email import EmailClient  # type: ignore
+
+            client = EmailClient.from_connection_string(connection_string)
+            sender = get_secret("AZURE_COMM_EMAIL_SENDER", "DoNotReply@d31337m3.com") or "DoNotReply@d31337m3.com"
+            message = {
+                "senderAddress": sender,
+                "recipients": {"to": [{"address": to}]},
+                "content": {
+                    "subject": subject,
+                    "plainText": body,
+                    "html": f"<html><body><pre>{body}</pre></body></html>",
+                },
+            }
+            poller = client.begin_send(message)
+            poller.result()
+            return True
+        except Exception as e:
+            logger.warning(f"Azure email send failed, falling back to mock: {e}")
+            return False
+
 # Email service mock (can be replaced with real implementation)
 async def send_email_mock(to: str, subject: str, body: str, attachments: Optional[List[Dict]] = None) -> bool:
-    """Mock email service for development"""
-    logger.info(f"[EMAIL-MOCK] to={to} subject={subject!r}")
-    return True
+        """Send via Azure when configured, otherwise log-only fallback."""
+        if _send_email_via_azure(to, subject, body):
+            logger.info(f"[EMAIL-AZURE] to={to} subject={subject!r}")
+            return True
+        logger.info(f"[EMAIL-MOCK] to={to} subject={subject!r}")
+        return True
 
 # Pydantic models (imported from shared or defined locally)
 from pydantic import BaseModel, EmailStr, Field

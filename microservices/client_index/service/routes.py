@@ -158,7 +158,38 @@ def _get_device_id(request: Request) -> Optional[str]:
     return did[:255]
 
 
+def _send_email_via_azure(to: str, subject: str, body: str) -> bool:
+    connection_string = get_secret("AZURE_COMM_EMAIL_CONNECTION_STRING")
+    if not connection_string:
+        return False
+
+    try:
+        from azure.communication.email import EmailClient  # type: ignore
+
+        client = EmailClient.from_connection_string(connection_string)
+        sender = get_secret("AZURE_COMM_EMAIL_SENDER", "DoNotReply@d31337m3.com") or "DoNotReply@d31337m3.com"
+        message = {
+            "senderAddress": sender,
+            "recipients": {"to": [{"address": to}]},
+            "content": {
+                "subject": subject,
+                "plainText": body,
+                "html": f"<html><body><pre>{body}</pre></body></html>",
+            },
+        }
+        poller = client.begin_send(message)
+        result = poller.result()
+        logger.info(f"Azure email sent: {getattr(result, 'message_id', None)}")
+        return True
+    except Exception as e:
+        logger.warning(f"Azure email send failed, falling back to SMTP: {e}")
+        return False
+
+
 def _send_email_sync(to: str, subject: str, body: str) -> bool:
+    if _send_email_via_azure(to, subject, body):
+        return True
+
     smtp_host = get_secret("SMTP_HOST")
     smtp_port = get_int_secret("SMTP_PORT", 465)
     smtp_username = get_secret("SMTP_USERNAME")

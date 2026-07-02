@@ -13,7 +13,7 @@ set -euo pipefail
 
 MAILBOX="${MAILBOX:-support@d31337m3.com}"
 RELAY_HOST="${RELAY_HOST:-}"
-RELAY_PORT="${RELAY_PORT:-587}"
+RELAY_PORT="${RELAY_PORT:-2525}"
 RELAY_USERNAME="${RELAY_USERNAME:-}"
 RELAY_PASSWORD="${RELAY_PASSWORD:-}"
 MAILCOW_CONF="${MAILCOW_CONF:-/opt/mailcow-dockerized/mailcow.conf}"
@@ -32,8 +32,12 @@ need_cmd docker
 need_cmd timeout
 need_cmd bash
 
-if [[ -z "$RELAY_HOST" || -z "$RELAY_USERNAME" || -z "$RELAY_PASSWORD" ]]; then
-  echo "Missing relay settings. Required: RELAY_HOST, RELAY_USERNAME, RELAY_PASSWORD" >&2
+if [[ -z "$RELAY_HOST" ]]; then
+  RELAY_HOST="$(ip route show default 2>/dev/null | awk 'NR==1 {print $3}')"
+fi
+
+if [[ -z "$RELAY_HOST" ]]; then
+  echo "Missing relay host and could not auto-detect host gateway" >&2
   exit 1
 fi
 

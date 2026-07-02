@@ -15,6 +15,8 @@ set -euo pipefail
 #   INFISICAL_ENV_FILE=/etc/d31337m3/client-index.infisical.env
 #   MAILCOW_API_BASE=https://127.0.0.1:8444
 #   MAILCOW_API_KEY=<rw-api-key>
+#   AZURE_COMM_EMAIL_CONNECTION_STRING=<azure connection string>
+#   AZURE_COMM_EMAIL_SENDER=DoNotReply@d31337m3.com
 #   NEW_SMTP_PASSWORD=<set specific password>
 
 SMTP_MAILBOX="${SMTP_MAILBOX:-support@d31337m3.com}"
@@ -235,6 +237,11 @@ updates = {
     "SMTP_PASSWORD": password,
     "SMTP_FROM": mailbox,
 }
+
+azure_connection_string = os.environ.get("AZURE_COMM_EMAIL_CONNECTION_STRING", "").strip()
+if azure_connection_string:
+  updates["AZURE_COMM_EMAIL_CONNECTION_STRING"] = azure_connection_string
+  updates["AZURE_COMM_EMAIL_SENDER"] = os.environ.get("AZURE_COMM_EMAIL_SENDER", "DoNotReply@d31337m3.com")
 
 client = InfisicalSDKClient(host=host)
 client.auth.token_auth.login(token=token)

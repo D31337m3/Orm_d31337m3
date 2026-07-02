@@ -675,7 +675,30 @@ async def interac_webhook(request: Request):
 
 # Email service mock (can be replaced with real implementation)
 async def send_email_mock(to: str, subject: str, body: str, attachments: Optional[List[Dict]] = None) -> bool:
-    """Development email sink; logs only when SMTP is not wired for this service."""
+    """Send via Azure when configured, otherwise log-only fallback."""
+    connection_string = get_secret("AZURE_COMM_EMAIL_CONNECTION_STRING")
+    if connection_string:
+        try:
+            from azure.communication.email import EmailClient  # type: ignore
+
+            client = EmailClient.from_connection_string(connection_string)
+            sender = get_secret("AZURE_COMM_EMAIL_SENDER", "DoNotReply@d31337m3.com") or "DoNotReply@d31337m3.com"
+            message = {
+                "senderAddress": sender,
+                "recipients": {"to": [{"address": to}]},
+                "content": {
+                    "subject": subject,
+                    "plainText": body,
+                    "html": f"<html><body><pre>{body}</pre></body></html>",
+                },
+            }
+            poller = client.begin_send(message)
+            poller.result()
+            logger.info(f"[EMAIL-AZURE] to={to} subject={subject!r}")
+            return True
+        except Exception as e:
+            logger.warning(f"Azure email send failed, falling back to mock: {e}")
+
     logger.info(f"[EMAIL-MOCK] to={to} subject={subject!r}")
     return True
 

@@ -569,6 +569,34 @@ def _support_generate_otp() -> str:
     return f"{random.randint(0, 999999):06d}"
 
 
+def _send_email_via_azure(to: str, subject: str, body: str) -> bool:
+    connection_string = _secret("AZURE_COMM_EMAIL_CONNECTION_STRING")
+    if not connection_string:
+        return False
+
+    try:
+        from azure.communication.email import EmailClient  # type: ignore
+
+        client = EmailClient.from_connection_string(connection_string)
+        sender = _secret("AZURE_COMM_EMAIL_SENDER", "DoNotReply@d31337m3.com") or "DoNotReply@d31337m3.com"
+        message = {
+            "senderAddress": sender,
+            "recipients": {"to": [{"address": to}]},
+            "content": {
+                "subject": subject,
+                "plainText": body,
+                "html": f"<html><body><pre>{body}</pre></body></html>",
+            },
+        }
+        poller = client.begin_send(message)
+        result = poller.result()
+        logger.info(f"Azure email sent: {getattr(result, 'message_id', None)}")
+        return True
+    except Exception as e:
+        logger.warning(f"Azure email send failed, falling back to SMTP: {e}")
+        return False
+
+
 def _ratelimit(key: str, max_attempts: int, window_seconds: int) -> tuple[bool, int]:
     now = time.time()
     bucket = [t for t in RATE_LIMITS.get(key, []) if now - t < window_seconds]
@@ -582,6 +610,9 @@ def _ratelimit(key: str, max_attempts: int, window_seconds: int) -> tuple[bool, 
 
 
 def _send_email_sync(to: str, subject: str, body: str) -> bool:
+    if _send_email_via_azure(to, subject, body):
+        return True
+
     smtp_host = _secret("SMTP_HOST")
     smtp_port = int(_secret("SMTP_PORT", "465") or "465")
     smtp_username = _secret("SMTP_USERNAME")

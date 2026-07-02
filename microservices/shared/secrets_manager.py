@@ -203,6 +203,10 @@ def init_infisical(config: Optional[InfisicalConfig] = None) -> bool:
         _with_retry_backoff(_do_init, max_retries=5)
 
         _initialized = True
+        try:
+            load_global_secrets()
+        except Exception as e:
+            logger.warning(f"Global Infisical secret preload warning: {e}")
         _update_health_success(0.0)
         logger.info(
             f"Infisical initialized successfully for project {cfg.project_id}/{cfg.environment}"
@@ -260,46 +264,44 @@ def get_csv_secret(key: str, default_csv: str) -> List[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
-def get_cors_allowed_origins() -> List[str]:
-    return get_csv_secret("CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
-
-
-def load_service_secrets(service_name: str) -> Dict[str, str]:
-    cfg = InfisicalConfig()
+def _load_secrets_at_path(secret_path: str) -> Dict[str, str]:
+    cfg = InfisicalConfig(secrets_path=secret_path)
     if not cfg.project_id:
         return {}
-
-    base_path = _normalize_secrets_path(cfg.secrets_path)
-    secrets_path = f"/{service_name}" if not base_path else f"{base_path}/{service_name}"
 
     try:
         def _do_load():
             client = _build_client(cfg)
             if not client:
                 raise RuntimeError("Infisical client not available")
-            service_cfg = InfisicalConfig(
-                site_url=cfg.site_url,
-                client_id=cfg.client_id,
-                client_secret=cfg.client_secret,
-                service_token=cfg.service_token,
-                project_id=cfg.project_id,
-                environment=cfg.environment,
-                secrets_path=secrets_path,
-            )
-            return _list_secrets(client, service_cfg)
+            return _list_secrets(client, cfg)
 
-        service_secrets = _with_retry_backoff(_do_load, max_retries=3)
-
-        result = {}
-        for secret in service_secrets:
+        secrets = _with_retry_backoff(_do_load, max_retries=3)
+        result: Dict[str, str] = {}
+        for secret in secrets:
             key, value = _extract_secret_fields(secret)
             if key and value is not None:
                 result[key] = value
                 _secrets_cache[key] = value
-
         return result
-
     except Exception as e:
-        logger.error(f"Failed to load secrets for service '{service_name}' after retries: {e}")
+        logger.error(f"Failed to load Infisical secrets at path '{secret_path}': {e}")
         _update_health_failure(str(e))
         return {}
+
+
+def load_global_secrets() -> Dict[str, str]:
+    cfg = InfisicalConfig()
+    base_path = _normalize_secrets_path(cfg.secrets_path)
+    return _load_secrets_at_path(base_path)
+
+
+def get_cors_allowed_origins() -> List[str]:
+    return get_csv_secret("CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
+
+
+def load_service_secrets(service_name: str) -> Dict[str, str]:
+    cfg = InfisicalConfig()
+    base_path = _normalize_secrets_path(cfg.secrets_path)
+    secrets_path = f"/{service_name}" if not base_path else f"{base_path}/{service_name}"
+    return _load_secrets_at_path(secrets_path)
